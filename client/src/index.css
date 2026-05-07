@@ -1,0 +1,236 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ============================================================
+   HVL — "Clinical Trust" Design System
+   Movement: Medical / Biometric Interface
+   Primary: Deep Navy #0A1628 | Accent: Electric Teal #00C9B1
+   Warning: Amber #F5A623 | Success: Green #22C55E
+   Fonts: Space Grotesk (headings) + Inter (body) + Space Mono (codes)
+   ============================================================ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+  --radius: 0.75rem;
+
+  /* HVL Dark Theme — Clinical Trust */
+  --background: oklch(0.115 0.025 240);       /* Deep Navy #0A1628 */
+  --foreground: oklch(0.95 0.005 220);         /* Near white */
+  --card: oklch(0.155 0.022 240);              /* Slightly lighter navy */
+  --card-foreground: oklch(0.95 0.005 220);
+  --popover: oklch(0.155 0.022 240);
+  --popover-foreground: oklch(0.95 0.005 220);
+
+  /* Teal primary */
+  --primary: oklch(0.76 0.14 185);             /* Electric Teal #00C9B1 */
+  --primary-foreground: oklch(0.115 0.025 240);
+
+  --secondary: oklch(0.20 0.022 240);
+  --secondary-foreground: oklch(0.85 0.005 220);
+  --muted: oklch(0.18 0.018 240);
+  --muted-foreground: oklch(0.60 0.015 220);
+  --accent: oklch(0.76 0.14 185);              /* Teal accent */
+  --accent-foreground: oklch(0.115 0.025 240);
+
+  --destructive: oklch(0.65 0.22 25);          /* Red for danger */
+  --destructive-foreground: oklch(0.98 0 0);
+
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.76 0.14 185);
+
+  /* Charts */
+  --chart-1: oklch(0.76 0.14 185);
+  --chart-2: oklch(0.72 0.17 145);
+  --chart-3: oklch(0.78 0.16 75);
+  --chart-4: oklch(0.65 0.22 25);
+  --chart-5: oklch(0.60 0.015 220);
+
+  /* Sidebar */
+  --sidebar: oklch(0.13 0.024 240);
+  --sidebar-foreground: oklch(0.95 0.005 220);
+  --sidebar-primary: oklch(0.76 0.14 185);
+  --sidebar-primary-foreground: oklch(0.115 0.025 240);
+  --sidebar-accent: oklch(0.20 0.022 240);
+  --sidebar-accent-foreground: oklch(0.95 0.005 220);
+  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-ring: oklch(0.76 0.14 185);
+
+  /* HVL custom tokens */
+  --hvl-teal: #00C9B1;
+  --hvl-navy: #0A1628;
+  --hvl-amber: #F5A623;
+  --hvl-green: #22C55E;
+  --hvl-red: #EF4444;
+  --hvl-card-border: rgba(0, 201, 177, 0.15);
+  --hvl-glow: 0 0 20px rgba(0, 201, 177, 0.25);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', sans-serif;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Space Grotesk', sans-serif;
+  }
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [type="button"]:not(:disabled),
+  [type="submit"]:not(:disabled),
+  [type="reset"]:not(:disabled),
+  a[href],
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled) {
+    @apply cursor-pointer;
+  }
+}
+
+@layer components {
+  .container {
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .flex {
+    min-height: 0;
+    min-width: 0;
+  }
+
+  @media (min-width: 640px) {
+    .container {
+      padding-left: 1.5rem;
+      padding-right: 1.5rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .container {
+      padding-left: 2rem;
+      padding-right: 2rem;
+      max-width: 1280px;
+    }
+  }
+
+  /* HVL-specific utility classes */
+  .hvl-card {
+    background: var(--card);
+    border: 1px solid var(--hvl-card-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--hvl-glow);
+  }
+
+  .hvl-teal-glow {
+    box-shadow: 0 0 20px rgba(0, 201, 177, 0.3), 0 0 40px rgba(0, 201, 177, 0.1);
+  }
+
+  .hvl-pulse-ring {
+    animation: pulse-ring 2s ease-out infinite;
+  }
+
+  .hvl-code {
+    font-family: 'Space Mono', monospace;
+    letter-spacing: 0.15em;
+  }
+
+  @keyframes pulse-ring {
+    0% { box-shadow: 0 0 0 0 rgba(0, 201, 177, 0.5); }
+    70% { box-shadow: 0 0 0 16px rgba(0, 201, 177, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(0, 201, 177, 0); }
+  }
+
+  @keyframes fade-in-up {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes word-appear {
+    from { opacity: 0; transform: scale(0.9); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  .animate-fade-in-up {
+    animation: fade-in-up 0.3s ease-out forwards;
+  }
+
+  .animate-word-appear {
+    animation: word-appear 0.4s ease-out forwards;
+  }
+
+  /* Phone frame styling */
+  .phone-frame {
+    background: oklch(0.13 0.024 240);
+    border: 1px solid rgba(0, 201, 177, 0.2);
+    border-radius: 2rem;
+    overflow: hidden;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(0, 201, 177, 0.08);
+  }
+
+  .phone-status-bar {
+    background: oklch(0.10 0.022 240);
+    padding: 0.5rem 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.65rem;
+    color: rgba(255,255,255,0.6);
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+  }
+
+  .phone-nav-bar {
+    background: oklch(0.13 0.024 240);
+    border-top: 1px solid rgba(255,255,255,0.06);
+    padding: 0.5rem 0;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "name": "LiveLock — Human Verification Layer",
+  "short_name": "LiveLock",
+  "description": "Verify your team's identity in real time before any high-risk action. Stops AI impersonation, deepfakes, and voice cloning.",
+  "start_url": "/app/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0A1628",
+  "theme_color": "#00C9B1",
+  "categories": ["security", "business", "productivity"],
+  "icons": [
+    {
+      "src": "/manus-storage/icon-144x144_ef79dc1d.png",
+      "sizes": "144x144",
+      "type": "image/png"
+    },
+    {
+      "src": "/manus-storage/icon-152x152_4fe76cae.png",
+      "sizes": "152x152",
+      "type": "image/png"
+    },
+    {
+      "src": "/manus-storage/icon-192x192_4868ddd0.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/manus-storage/icon-512x512_dad26c9d.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/manus-storage/icon-512x512-maskable_9439e5d5.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Verify Now",
+      "short_name": "Verify",
+      "description": "Start a new verification session",
+      "url": "/app/verify",
+      "icons": [
+        {
+          "src": "/manus-storage/icon-192x192_4868ddd0.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "View your verification dashboard",
+      "url": "/app/dashboard",
+      "icons": [
+        {
+          "src": "/manus-storage/icon-192x192_4868ddd0.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}

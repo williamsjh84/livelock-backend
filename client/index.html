@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <title>LiveLock — Human Verification Layer</title>
+    <meta name="description" content="LiveLock is a human verification layer technology. Verify your team's identity in real time before executing high-risk actions — stop AI impersonation, deepfakes, and voice cloning fraud." />
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Theme color (browser chrome / status bar) -->
+    <meta name="theme-color" content="#00C9B1" />
+    <meta name="msapplication-TileColor" content="#0A1628" />
+
+    <!-- iOS PWA (Add to Home Screen) -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="LiveLock" />
+    <link rel="apple-touch-icon" href="https://d2xsxph8kpxj0f.cloudfront.net/310519663365906737/dFrrqs8eKQpkBZzRWadPWF/livelock-icon_e8a71104.png" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="https://d2xsxph8kpxj0f.cloudfront.net/310519663365906737/dFrrqs8eKQpkBZzRWadPWF/livelock-icon_e8a71104.png" />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="LiveLock — Human Verification Layer" />
+    <meta property="og:description" content="Before you act, verify the human. LiveLock gives your team a real-time, out-of-band identity check." />
+    <meta property="og:url" content="https://livelock.io" />
+    <meta property="og:type" content="website" />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <script
+      defer
+      src="%VITE_ANALYTICS_ENDPOINT%/umami"
+      data-website-id="%VITE_ANALYTICS_WEBSITE_ID%"></script>
+  </body>
+
+</html>

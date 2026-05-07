@@ -1,0 +1,245 @@
+/**
+ * LiveLock — Email Service
+ * Sends transactional emails via Resend.
+ * All email functions are non-throwing: they log and return false on failure
+ * so a broken email service never blocks a successful signup.
+ */
+import { Resend } from "resend";
+import { ENV } from "./_core/env";
+
+// Lazily initialise the client so tests can mock the env
+function getResendClient(): Resend | null {
+  if (!ENV.resendApiKey) {
+    console.warn("[Email] RESEND_API_KEY is not set — emails will not be sent.");
+    return null;
+  }
+  return new Resend(ENV.resendApiKey);
+}
+
+// ── HTML Template ─────────────────────────────────────────────────────────────
+
+function buildEarlyAccessConfirmationHtml(firstName: string, company: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>You're on the LiveLock waitlist</title>
+</head>
+<body style="margin:0;padding:0;background-color:#0A1628;font-family:'Inter',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0A1628;padding:40px 16px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
+
+          <!-- Header / Logo -->
+          <tr>
+            <td align="center" style="padding-bottom:32px;">
+              <table cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="vertical-align:middle;padding-right:12px;">
+                    <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#00C9B1,#0077B6);display:inline-flex;align-items:center;justify-content:center;">
+                      <!-- Shield icon (inline SVG) -->
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L3 7V12C3 16.55 6.84 20.74 12 22C17.16 20.74 21 16.55 21 12V7L12 2Z" fill="white"/>
+                      </svg>
+                    </div>
+                  </td>
+                  <td style="vertical-align:middle;">
+                    <p style="margin:0;font-size:20px;font-weight:700;color:#FFFFFF;letter-spacing:-0.3px;">LiveLock</p>
+                    <p style="margin:0;font-size:9px;color:#00C9B1;letter-spacing:2px;text-transform:uppercase;">Human Verification Layer</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Card -->
+          <tr>
+            <td style="background-color:#0F1E35;border-radius:20px;border:1px solid rgba(255,255,255,0.07);padding:40px 36px;">
+
+              <!-- Check icon -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+                <tr>
+                  <td align="center">
+                    <div style="width:64px;height:64px;border-radius:50%;background-color:rgba(0,201,177,0.1);border:2px solid rgba(0,201,177,0.3);display:inline-flex;align-items:center;justify-content:center;">
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M20 6L9 17L4 12" stroke="#00C9B1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Headline -->
+              <h1 style="margin:0 0 8px;font-size:26px;font-weight:700;color:#FFFFFF;text-align:center;letter-spacing:-0.5px;">
+                You're on the list, ${firstName}.
+              </h1>
+              <p style="margin:0 0 28px;font-size:14px;color:rgba(255,255,255,0.5);text-align:center;line-height:1.6;">
+                Thanks for requesting early access for <strong style="color:rgba(255,255,255,0.75);">${company}</strong>.<br/>
+                We'll be in touch within 2 business days.
+              </p>
+
+              <!-- Divider -->
+              <div style="height:1px;background:rgba(255,255,255,0.06);margin-bottom:28px;"></div>
+
+              <!-- What happens next -->
+              <p style="margin:0 0 16px;font-size:10px;font-weight:600;color:rgba(0,201,177,0.7);letter-spacing:2px;text-transform:uppercase;">
+                What happens next
+              </p>
+
+              <!-- Step 1 -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:14px;">
+                <tr>
+                  <td width="28" valign="top">
+                    <div style="width:20px;height:20px;border-radius:50%;background-color:rgba(0,201,177,0.12);border:1px solid rgba(0,201,177,0.3);text-align:center;line-height:20px;">
+                      <span style="font-size:9px;font-weight:700;color:#00C9B1;">1</span>
+                    </div>
+                  </td>
+                  <td style="padding-left:10px;">
+                    <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.5);line-height:1.5;">We review your submission within 2 business days</p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Step 2 -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:14px;">
+                <tr>
+                  <td width="28" valign="top">
+                    <div style="width:20px;height:20px;border-radius:50%;background-color:rgba(0,201,177,0.12);border:1px solid rgba(0,201,177,0.3);text-align:center;line-height:20px;">
+                      <span style="font-size:9px;font-weight:700;color:#00C9B1;">2</span>
+                    </div>
+                  </td>
+                  <td style="padding-left:10px;">
+                    <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.5);line-height:1.5;">You receive a private invite link for your team</p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Step 3 -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:14px;">
+                <tr>
+                  <td width="28" valign="top">
+                    <div style="width:20px;height:20px;border-radius:50%;background-color:rgba(0,201,177,0.12);border:1px solid rgba(0,201,177,0.3);text-align:center;line-height:20px;">
+                      <span style="font-size:9px;font-weight:700;color:#00C9B1;">3</span>
+                    </div>
+                  </td>
+                  <td style="padding-left:10px;">
+                    <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.5);line-height:1.5;">Onboard up to 5 team members in under 10 minutes</p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Step 4 -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+                <tr>
+                  <td width="28" valign="top">
+                    <div style="width:20px;height:20px;border-radius:50%;background-color:rgba(0,201,177,0.12);border:1px solid rgba(0,201,177,0.3);text-align:center;line-height:20px;">
+                      <span style="font-size:9px;font-weight:700;color:#00C9B1;">4</span>
+                    </div>
+                  </td>
+                  <td style="padding-left:10px;">
+                    <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.5);line-height:1.5;">Run your first live verification session</p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Divider -->
+              <div style="height:1px;background:rgba(255,255,255,0.06);margin-bottom:28px;"></div>
+
+              <!-- CTA Button -->
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center">
+                    <a href="https://livelock.io" style="display:inline-block;padding:13px 32px;background-color:#00C9B1;color:#0A1628;font-size:13px;font-weight:700;text-decoration:none;border-radius:12px;letter-spacing:0.2px;">
+                      See the Live Demo →
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td align="center" style="padding-top:28px;">
+              <p style="margin:0 0 6px;font-size:11px;color:rgba(255,255,255,0.2);">
+                LiveLock · Human Verification Layer · livelock.io
+              </p>
+              <p style="margin:0;font-size:10px;color:rgba(255,255,255,0.15);">
+                You're receiving this because you requested early access. No spam, ever.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+function buildEarlyAccessConfirmationText(firstName: string, company: string): string {
+  return `Hi ${firstName},
+
+You're on the LiveLock waitlist!
+
+Thanks for requesting early access for ${company}. We'll be in touch within 2 business days.
+
+What happens next:
+1. We review your submission within 2 business days
+2. You receive a private invite link for your team
+3. Onboard up to 5 team members in under 10 minutes
+4. Run your first live verification session
+
+See the live demo at: https://livelock.io
+
+—
+LiveLock · Human Verification Layer · livelock.io
+You're receiving this because you requested early access.
+`;
+}
+
+// ── Public API ────────────────────────────────────────────────────────────────
+
+export interface EarlyAccessEmailParams {
+  toEmail: string;
+  firstName: string;
+  company: string;
+}
+
+/**
+ * Sends a branded confirmation email to a new Early Access signup.
+ * Returns true on success, false on any failure (non-throwing).
+ */
+export async function sendEarlyAccessConfirmation(
+  params: EarlyAccessEmailParams
+): Promise<boolean> {
+  const client = getResendClient();
+  if (!client) return false;
+
+  const { toEmail, firstName, company } = params;
+
+  try {
+    const { error } = await client.emails.send({
+      from: "LiveLock <onboarding@resend.dev>",
+      to: [toEmail],
+      subject: `You're on the LiveLock waitlist, ${firstName} 🔒`,
+      html: buildEarlyAccessConfirmationHtml(firstName, company),
+      text: buildEarlyAccessConfirmationText(firstName, company),
+    });
+
+    if (error) {
+      console.warn("[Email] Resend returned an error:", error);
+      return false;
+    }
+
+    console.info(`[Email] Confirmation sent to ${toEmail}`);
+    return true;
+  } catch (err) {
+    console.warn("[Email] Failed to send confirmation email:", err);
+    return false;
+  }
+}
