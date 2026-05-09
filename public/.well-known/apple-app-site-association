@@ -1,0 +1,14 @@
+{
+  "webcredentials": {
+    "apps": ["8RHNVZFU58.io.livelock.app"]
+  },
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "8RHNVZFU58.io.livelock.app",
+        "paths": ["*"]
+      }
+    ]
+  }
+}
