@@ -145,9 +145,11 @@ async function startServer() {
   );
 
   // ── Static files ──────────────────────────────────────────────────────────
+  // In production: __dirname is dist/server, so public is at dist/public
+  // We also check the root public folder as fallback
   const staticPath =
     process.env.NODE_ENV === "production"
-      ? path.resolve(__dirname, "public")
+      ? path.resolve(__dirname, "..", "public")
       : path.resolve(__dirname, "..", "dist", "public");
 
   app.use(express.static(staticPath, {
