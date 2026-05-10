@@ -21,3 +21,4 @@ RUN cp -r public dist/public 2>/dev/null || true
 EXPOSE 3000
 
 CMD ["node", "dist/index.js"]
+"# force rebuild" 
