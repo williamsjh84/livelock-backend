@@ -6,6 +6,7 @@ import { adminProcedure, publicProcedure, router } from "./_core/trpc";
 import { getEarlyAccessSignups, insertEarlyAccessSignup } from "./db";
 import { sendEarlyAccessConfirmation } from "./email";
 import { webauthnRouter } from "./webauthnRouter";
+import { passwordRouter } from "./passwordRouter";
 import { sessionsRouter, teamsRouter, auditRouter, usersRouter } from "./sessionsRouter";
 import { z } from "zod";
 
@@ -91,6 +92,7 @@ export const appRouter = router({
   }),
   earlyAccess: earlyAccessRouter,
   webauthn: webauthnRouter,
+  password: passwordRouter,
   sessions: sessionsRouter,
   teams: teamsRouter,
   audit: auditRouter,

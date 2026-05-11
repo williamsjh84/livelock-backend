@@ -24,6 +24,8 @@ export const users = mysqlTable("users", {
   displayName: varchar("displayName", { length: 100 }),
   /** Whether this user has completed WebAuthn passkey registration */
   hasPasskey: boolean("hasPasskey").default(false).notNull(),
+  /** Hashed password for email/password auth (format: salt:hash) */
+  passwordHash: varchar("passwordHash", { length: 255 }),
 });
 
 export type User = typeof users.$inferSelect;
