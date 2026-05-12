@@ -24,6 +24,8 @@ type AuthenticationResponseJSON = Parameters<typeof verifyAuthenticationResponse
 type RegistrationResponseJSON = Parameters<typeof verifyRegistrationResponse>[0]['response'];
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { SignJWT } from "jose";
+import { ENV } from "./_core/env";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { ENV } from "./_core/env";
@@ -80,6 +82,15 @@ function getExpectedOrigins(rpId: string): string[] {
 
 function getRpName(): string {
   return "LiveLock";
+}
+
+
+async function createMobileJWT(userId: number): Promise<string> {
+  const secretKey = new TextEncoder().encode(ENV.cookieSecret);
+  return new SignJWT({ userId })
+    .setProtectedHeader({ alg: "HS256" })
+    .setExpirationTime("365d")
+    .sign(secretKey);
 }
 
 export const webauthnRouter = router({
@@ -225,7 +236,8 @@ export const webauthnRouter = router({
         maxAge: 30 * 24 * 60 * 60 * 1000,
       });
 
-      return { verified: true, userId: input.userId };
+      const mobileToken = await createMobileJWT(input.userId);
+      return { verified: true, userId: input.userId, token: mobileToken, user: { id: user[0].id, email: user[0].email, displayName: user[0].displayName } };
     }),
 
   /**
@@ -349,7 +361,8 @@ export const webauthnRouter = router({
         maxAge: 30 * 24 * 60 * 60 * 1000,
       });
 
-      return { verified: true, userId: user.id, displayName: user.displayName ?? user.name ?? "" };
+      const mobileToken = await createMobileJWT(user.id);
+      return { verified: true, userId: user.id, displayName: user.displayName ?? user.name ?? "", token: mobileToken, user: { id: user.id, email: user.email, displayName: user.displayName } };
     }),
 
   /**
