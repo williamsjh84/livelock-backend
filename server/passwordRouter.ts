@@ -11,6 +11,8 @@ import { getDb } from "./db";
 import { users } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { ENV } from "./_core/env";
+import { getSessionCookieOptions } from "./_core/cookies";
+import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import * as crypto from "crypto";
 
 // Simple password hashing using Node's built-in crypto (no bcrypt dependency needed)
@@ -41,7 +43,7 @@ export const passwordRouter = router({
       displayName: z.string().min(1).max(100),
       password: z.string().min(8).max(128),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       const email = input.email.toLowerCase().trim();
 
@@ -86,6 +88,10 @@ export const passwordRouter = router({
 
       const token = await createJWT(newUser[0].id);
 
+      // Set session cookie so web app auth works immediately after register
+      const cookieOptions = getSessionCookieOptions(ctx.req);
+      ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+
       return {
         token,
         user: {
@@ -102,7 +108,7 @@ export const passwordRouter = router({
       email: z.string().email().max(320),
       password: z.string().min(1).max(128),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       const email = input.email.toLowerCase().trim();
 
@@ -133,6 +139,10 @@ export const passwordRouter = router({
       await db.update(users).set({ lastSignedIn: new Date() }).where(eq(users.id, user.id));
 
       const token = await createJWT(user.id);
+
+      // Set session cookie so web app auth works immediately after login
+      const cookieOptions = getSessionCookieOptions(ctx.req);
+      ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
       return {
         token,
