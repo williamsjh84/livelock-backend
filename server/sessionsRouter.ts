@@ -28,6 +28,8 @@ import {
   getTeamMembers,
   addTeamMember,
   removeTeamMember,
+  updateTeamName,
+  deleteTeamAndMembers,
   createInvite,
   getInviteByToken,
   markInviteUsed,
@@ -340,6 +342,86 @@ const teamsRouter = router({
         actorId: ctx.user.id,
         action: "member.removed",
         metadata: JSON.stringify({ removedUserId: input.userId }),
+      });
+
+      return { success: true };
+    }),
+
+  /**
+   * Rename the team (owner only).
+   */
+  updateName: protectedProcedure
+    .input(z.object({ name: z.string().min(1).max(200) }))
+    .mutation(async ({ ctx, input }) => {
+      const team = await getTeamByUserId(ctx.user.id);
+      if (!team) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
+      }
+      if (team.ownerId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Only the team owner can rename the team" });
+      }
+
+      await updateTeamName(team.id, input.name.trim());
+
+      await appendAuditLog({
+        teamId: team.id,
+        actorId: ctx.user.id,
+        action: "team.renamed",
+        metadata: JSON.stringify({ newName: input.name.trim() }),
+      });
+
+      return { success: true, name: input.name.trim() };
+    }),
+
+  /**
+   * Delete the team and remove all members (owner only).
+   */
+  deleteTeam: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      const team = await getTeamByUserId(ctx.user.id);
+      if (!team) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
+      }
+      if (team.ownerId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Only the team owner can delete the team" });
+      }
+
+      // Audit log before deletion so the teamId reference is still valid
+      await appendAuditLog({
+        teamId: team.id,
+        actorId: ctx.user.id,
+        action: "team.deleted",
+        metadata: JSON.stringify({ teamName: team.name }),
+      });
+
+      await deleteTeamAndMembers(team.id);
+
+      return { success: true };
+    }),
+
+  /**
+   * Leave the team (non-owner members only).
+   */
+  leaveTeam: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      const team = await getTeamByUserId(ctx.user.id);
+      if (!team) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "You are not in a team" });
+      }
+      if (team.ownerId === ctx.user.id) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "The owner cannot leave the team. Delete the team instead.",
+        });
+      }
+
+      await removeTeamMember(team.id, ctx.user.id);
+
+      await appendAuditLog({
+        teamId: team.id,
+        actorId: ctx.user.id,
+        action: "member.left",
+        metadata: JSON.stringify({ userId: ctx.user.id }),
       });
 
       return { success: true };

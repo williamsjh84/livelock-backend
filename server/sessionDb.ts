@@ -178,6 +178,21 @@ export async function addTeamMember(teamId: number, userId: number, role: "owner
   await db.insert(teamMembers).values({ teamId, userId, role });
 }
 
+export async function updateTeamName(teamId: number, name: string) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(teams).set({ name }).where(eq(teams.id, teamId));
+}
+
+export async function deleteTeamAndMembers(teamId: number) {
+  const db = await getDb();
+  if (!db) return;
+  // Delete dependent rows first to avoid orphan references, then the team itself
+  await db.delete(teamInvites).where(eq(teamInvites.teamId, teamId));
+  await db.delete(teamMembers).where(eq(teamMembers.teamId, teamId));
+  await db.delete(teams).where(eq(teams.id, teamId));
+}
+
 export async function removeTeamMember(teamId: number, userId: number) {
   const db = await getDb();
   if (!db) return;
