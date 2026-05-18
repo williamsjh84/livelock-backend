@@ -319,7 +319,7 @@ const teamsRouter = router({
    * Accept an invite token and join the team.
    */
   acceptInvite: protectedProcedure
-    .input(z.object({ token: z.string().uuid() }))
+    .input(z.object({ token: z.string().uuid(), forceSwitch: z.boolean().optional() }))
     .mutation(async ({ ctx, input }) => {
       const invite = await getInviteByToken(input.token);
 
@@ -336,7 +336,24 @@ const teamsRouter = router({
       // Check if user is already in a team
       const existing = await getTeamByUserId(ctx.user.id);
       if (existing) {
-        throw new TRPCError({ code: "CONFLICT", message: "You are already a member of a team" });
+        if (!input.forceSwitch) {
+          throw new TRPCError({ code: "CONFLICT", message: "You are already a member of a team" });
+        }
+        // Owner must delete their team before joining another
+        if (existing.ownerId === ctx.user.id) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "You own a team. Please delete your team before joining another.",
+          });
+        }
+        // Non-owner: leave current team silently then join new one
+        await removeTeamMember(existing.id, ctx.user.id);
+        await appendAuditLog({
+          teamId: existing.id,
+          actorId: ctx.user.id,
+          action: "member.left",
+          metadata: JSON.stringify({ reason: "switched_team" }),
+        });
       }
 
       await addTeamMember(invite.teamId, ctx.user.id, "member");
