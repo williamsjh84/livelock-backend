@@ -231,6 +231,14 @@ export async function markInviteUsed(token: string) {
     .where(eq(teamInvites.token, token));
 }
 
+export async function deleteInvite(inviteId: number, teamId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .delete(teamInvites)
+    .where(and(eq(teamInvites.id, inviteId), eq(teamInvites.teamId, teamId)));
+}
+
 export async function getPendingInvitesForTeam(teamId: number) {
   const db = await getDb();
   if (!db) return [];

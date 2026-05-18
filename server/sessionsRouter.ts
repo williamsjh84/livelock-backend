@@ -33,6 +33,7 @@ import {
   createInvite,
   getInviteByToken,
   markInviteUsed,
+  deleteInvite,
   getPendingInvitesForTeam,
   getAuditLog,
   appendAuditLog,
@@ -273,12 +274,12 @@ const teamsRouter = router({
 
       // Send invite email (non-fatal — invite is still created even if email fails)
       const inviterName = ctx.user.displayName || ctx.user.name || ctx.user.email || "A teammate";
-      await sendTeamInviteEmail({
+      const emailSent = await sendTeamInviteEmail({
         toEmail: input.email,
         inviterName,
         teamName: team.name,
         inviteUrl,
-      }).catch(err => console.warn("[Invite] Email send failed:", err));
+      }).catch(err => { console.warn("[Invite] Email send failed:", err); return false; });
 
       await appendAuditLog({
         teamId: team.id,
@@ -287,7 +288,31 @@ const teamsRouter = router({
         metadata: JSON.stringify({ email: input.email }),
       });
 
-      return { inviteUrl, token, expiresAt };
+      return { inviteUrl, token, expiresAt, emailSent };
+    }),
+
+  /**
+   * Cancel a pending invite (owner only).
+   */
+  cancelInvite: protectedProcedure
+    .input(z.object({ inviteId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const team = await getTeamByUserId(ctx.user.id);
+      if (!team) throw new TRPCError({ code: "NOT_FOUND", message: "You are not in a team" });
+      if (team.ownerId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Only the team owner can cancel invites" });
+      }
+
+      await deleteInvite(input.inviteId, team.id);
+
+      await appendAuditLog({
+        teamId: team.id,
+        actorId: ctx.user.id,
+        action: "member.invite_cancelled",
+        metadata: JSON.stringify({ inviteId: input.inviteId }),
+      });
+
+      return { success: true };
     }),
 
   /**

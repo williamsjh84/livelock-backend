@@ -13,12 +13,15 @@ export default function Team() {
   const createTeamMutation = trpc.teams.create.useMutation({ onSuccess: () => refetch() });
   const inviteMutation = trpc.teams.inviteMember.useMutation({ onSuccess: () => refetch() });
   const removeMutation = trpc.teams.removeMember.useMutation({ onSuccess: () => refetch() });
+  const cancelInviteMutation = trpc.teams.cancelInvite.useMutation({ onSuccess: () => refetch() });
 
   const [teamName, setTeamName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [emailSent, setEmailSent] = useState<boolean | null>(null);
   const [copied, setCopied] = useState(false);
   const [removingId, setRemovingId] = useState<number | null>(null);
+  const [cancellingId, setCancellingId] = useState<number | null>(null);
 
   const handleCreateTeam = async () => {
     if (!teamName.trim()) return;
@@ -38,6 +41,7 @@ export default function Team() {
         origin: window.location.origin,
       });
       setInviteUrl(result.inviteUrl);
+      setEmailSent(result.emailSent ?? false);
       setInviteEmail("");
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Failed to send invite");
@@ -49,6 +53,18 @@ export default function Team() {
     await navigator.clipboard.writeText(inviteUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleCancelInvite = async (inviteId: number) => {
+    if (!confirm("Cancel this invite? The link will stop working immediately.")) return;
+    setCancellingId(inviteId);
+    try {
+      await cancelInviteMutation.mutateAsync({ inviteId });
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to cancel invite");
+    } finally {
+      setCancellingId(null);
+    }
   };
 
   const handleRemove = async (userId: number) => {
@@ -141,7 +157,13 @@ export default function Team() {
 
           {inviteUrl && (
             <div className="mt-3 p-3 rounded-xl border border-[#00C9B1]/20 bg-[#00C9B1]/5">
-              <p className="text-[10px] text-[#00C9B1]/70 mb-1.5">Share this invite link (expires in 7 days):</p>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                {emailSent ? (
+                  <><Check size={11} className="text-[#00C9B1]" /><p className="text-[10px] text-[#00C9B1]/70">Invite email sent! Share this link as a backup:</p></>
+                ) : (
+                  <><AlertTriangle size={11} className="text-amber-400" /><p className="text-[10px] text-amber-400/80">Email not sent — share this link manually:</p></>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 <p className="text-xs text-white/50 truncate flex-1 font-mono">{inviteUrl}</p>
                 <button
@@ -170,6 +192,14 @@ export default function Team() {
                   <p className="text-[10px] text-white/30">Expires {new Date(invite.expiresAt).toLocaleDateString()}</p>
                 </div>
                 <span className="text-[9px] font-semibold text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded-full">Pending</span>
+                <button
+                  onClick={() => handleCancelInvite(invite.id)}
+                  disabled={cancellingId === invite.id}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg text-white/20 hover:text-red-400 hover:bg-red-400/10 transition-colors flex-shrink-0"
+                  title="Cancel invite"
+                >
+                  <Trash2 size={13} />
+                </button>
               </div>
             ))}
           </div>
