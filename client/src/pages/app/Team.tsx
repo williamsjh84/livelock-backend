@@ -1,77 +1,66 @@
 /**
  * LiveLock — Team Management Page (/app/team)
- * Create team, invite members, view roster, remove members.
+ * Supports multiple teams per user.
  */
 import { useState } from "react";
-import { Users, UserPlus, Crown, Shield, Copy, Check, Trash2, Clock, AlertTriangle } from "lucide-react";
+import { Users, UserPlus, Crown, Shield, Copy, Check, Trash2, Clock, AlertTriangle, Plus, ChevronDown, ChevronUp } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 
 export default function Team() {
   const { data: user } = trpc.auth.me.useQuery();
-  const { data: teamData, refetch } = trpc.teams.getMyTeam.useQuery();
+  const { data: teamsData = [], refetch } = trpc.teams.getMyTeam.useQuery();
   const createTeamMutation = trpc.teams.create.useMutation({ onSuccess: () => refetch() });
-  const inviteMutation = trpc.teams.inviteMember.useMutation({ onSuccess: () => refetch() });
+  const inviteMutation = trpc.teams.inviteMember.useMutation();
   const removeMutation = trpc.teams.removeMember.useMutation({ onSuccess: () => refetch() });
   const cancelInviteMutation = trpc.teams.cancelInvite.useMutation({ onSuccess: () => refetch() });
+  const deleteTeamMutation = trpc.teams.deleteTeam.useMutation({ onSuccess: () => refetch() });
+  const leaveTeamMutation = trpc.teams.leaveTeam.useMutation({ onSuccess: () => refetch() });
 
-  const [teamName, setTeamName] = useState("");
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
-  const [emailSent, setEmailSent] = useState<boolean | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [newTeamName, setNewTeamName] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [inviteState, setInviteState] = useState<Record<number, { email: string; url: string | null; emailSent: boolean | null }>>({});
+  const [copiedTeamId, setCopiedTeamId] = useState<number | null>(null);
   const [removingId, setRemovingId] = useState<number | null>(null);
   const [cancellingId, setCancellingId] = useState<number | null>(null);
+  const [collapsedTeams, setCollapsedTeams] = useState<Set<number>>(new Set());
 
   const handleCreateTeam = async () => {
-    if (!teamName.trim()) return;
+    if (!newTeamName.trim()) return;
     try {
-      await createTeamMutation.mutateAsync({ name: teamName.trim() });
-      setTeamName("");
+      await createTeamMutation.mutateAsync({ name: newTeamName.trim() });
+      setNewTeamName("");
+      setShowCreate(false);
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Failed to create team");
     }
   };
 
-  const handleInvite = async () => {
-    if (!inviteEmail.trim()) return;
+  const handleInvite = async (teamId: number) => {
+    const email = inviteState[teamId]?.email?.trim();
+    if (!email) return;
     try {
-      const result = await inviteMutation.mutateAsync({
-        email: inviteEmail.trim(),
-        origin: window.location.origin,
-      });
-      setInviteUrl(result.inviteUrl);
-      setEmailSent(result.emailSent ?? false);
-      setInviteEmail("");
+      const result = await inviteMutation.mutateAsync({ teamId, email, origin: window.location.origin });
+      setInviteState(s => ({ ...s, [teamId]: { email: "", url: result.inviteUrl, emailSent: result.emailSent ?? false } }));
+      refetch();
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Failed to send invite");
     }
   };
 
-  const handleCopy = async () => {
-    if (!inviteUrl) return;
-    await navigator.clipboard.writeText(inviteUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopyInvite = async (teamId: number) => {
+    const url = inviteState[teamId]?.url;
+    if (!url) return;
+    await navigator.clipboard.writeText(url);
+    setCopiedTeamId(teamId);
+    setTimeout(() => setCopiedTeamId(null), 2000);
   };
 
-  const handleCancelInvite = async (inviteId: number) => {
-    if (!confirm("Cancel this invite? The link will stop working immediately.")) return;
-    setCancellingId(inviteId);
-    try {
-      await cancelInviteMutation.mutateAsync({ inviteId });
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed to cancel invite");
-    } finally {
-      setCancellingId(null);
-    }
-  };
-
-  const handleRemove = async (userId: number) => {
-    if (!confirm("Remove this member from your team?")) return;
+  const handleRemove = async (teamId: number, userId: number) => {
+    if (!confirm("Remove this member from the team?")) return;
     setRemovingId(userId);
     try {
-      await removeMutation.mutateAsync({ userId });
+      await removeMutation.mutateAsync({ teamId, userId });
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Failed to remove member");
     } finally {
@@ -79,189 +68,268 @@ export default function Team() {
     }
   };
 
-  // ── No team yet ────────────────────────────────────────────────────────────
+  const handleCancelInvite = async (teamId: number, inviteId: number) => {
+    if (!confirm("Cancel this invite? The link will stop working immediately.")) return;
+    setCancellingId(inviteId);
+    try {
+      await cancelInviteMutation.mutateAsync({ teamId, inviteId });
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to cancel invite");
+    } finally {
+      setCancellingId(null);
+    }
+  };
 
-  if (!teamData) {
-    return (
-      <div className="p-6 max-w-sm mx-auto">
-        <div className="mb-6">
-          <p className="text-[10px] uppercase tracking-widest text-[#00C9B1]/60 mb-1">Team</p>
-          <h1 className="text-xl font-bold text-white" style={{ fontFamily: "Space Grotesk, sans-serif" }}>Create Your Team</h1>
-          <p className="text-xs text-white/40 mt-1">Set up a trusted network of colleagues who can verify each other.</p>
-        </div>
+  const handleDeleteTeam = async (teamId: number, teamName: string) => {
+    if (!confirm(`Delete "${teamName}"? This will remove all members and cannot be undone.`)) return;
+    try {
+      await deleteTeamMutation.mutateAsync({ teamId });
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to delete team");
+    }
+  };
 
-        <div className="p-5 rounded-2xl border border-white/[0.08] bg-white/[0.02] mb-4">
-          <div className="w-10 h-10 rounded-2xl bg-[#00C9B1]/10 border border-[#00C9B1]/20 flex items-center justify-center mb-4">
-            <Users size={18} className="text-[#00C9B1]" />
-          </div>
-          <p className="text-sm font-bold text-white mb-1" style={{ fontFamily: "Space Grotesk, sans-serif" }}>No team yet</p>
-          <p className="text-xs text-white/40 mb-4">Create a team to start inviting colleagues and verifying identities.</p>
+  const handleLeaveTeam = async (teamId: number, teamName: string) => {
+    if (!confirm(`Leave "${teamName}"?`)) return;
+    try {
+      await leaveTeamMutation.mutateAsync({ teamId });
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to leave team");
+    }
+  };
 
-          <input
-            type="text"
-            value={teamName}
-            onChange={e => setTeamName(e.target.value)}
-            placeholder="Team name (e.g. Finance Team)"
-            maxLength={200}
-            className="w-full px-3 py-2.5 rounded-xl border border-white/[0.08] bg-white/[0.03] text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-[#00C9B1]/40 mb-3 transition-all"
-            style={{ fontFamily: "Space Grotesk, sans-serif" }}
-            onKeyDown={e => e.key === "Enter" && handleCreateTeam()}
-          />
-          <Button
-            onClick={handleCreateTeam}
-            disabled={!teamName.trim() || createTeamMutation.isPending}
-            className="w-full bg-[#00C9B1] hover:bg-[#00C9B1]/80 text-[#0A1628] font-bold"
-          >
-            Create Team
-          </Button>
-        </div>
-      </div>
-    );
-  }
+  const toggleCollapse = (teamId: number) => {
+    setCollapsedTeams(s => {
+      const next = new Set(s);
+      next.has(teamId) ? next.delete(teamId) : next.add(teamId);
+      return next;
+    });
+  };
 
-  const { team, members, pendingInvites, isOwner } = teamData;
+  const font = { fontFamily: "Space Grotesk, sans-serif" };
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
-      <div className="mb-6">
-        <p className="text-[10px] uppercase tracking-widest text-[#00C9B1]/60 mb-1">Team</p>
-        <h1 className="text-xl font-bold text-white" style={{ fontFamily: "Space Grotesk, sans-serif" }}>{team.name}</h1>
-        <p className="text-xs text-white/40 mt-1">{members.length} member{members.length !== 1 ? "s" : ""} · Created {new Date(team.createdAt).toLocaleDateString()}</p>
+      {/* Page header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <p className="text-[10px] uppercase tracking-widest text-[#00C9B1]/60 mb-1">Teams</p>
+          <h1 className="text-xl font-bold text-white" style={font}>My Teams</h1>
+          <p className="text-xs text-white/40 mt-1">{teamsData.length} team{teamsData.length !== 1 ? "s" : ""}</p>
+        </div>
+        <Button
+          onClick={() => setShowCreate(v => !v)}
+          className="flex items-center gap-1.5 bg-[#00C9B1] hover:bg-[#00C9B1]/80 text-[#0A1628] font-bold text-xs px-3 py-2"
+        >
+          <Plus size={13} /> New Team
+        </Button>
       </div>
 
-      {/* Invite section (owner only) */}
-      {isOwner && (
-        <div className="p-5 rounded-2xl border border-white/[0.08] bg-white/[0.02] mb-5">
-          <div className="flex items-center gap-2 mb-3">
-            <UserPlus size={15} className="text-[#00C9B1]" />
-            <p className="text-sm font-bold text-white" style={{ fontFamily: "Space Grotesk, sans-serif" }}>Invite a Teammate</p>
-          </div>
+      {/* Create team form */}
+      {showCreate && (
+        <div className="p-5 rounded-2xl border border-[#00C9B1]/20 bg-[#00C9B1]/5 mb-5">
+          <p className="text-sm font-bold text-white mb-3" style={font}>Create a New Team</p>
           <div className="flex gap-2">
             <input
-              type="email"
-              value={inviteEmail}
-              onChange={e => setInviteEmail(e.target.value)}
-              placeholder="colleague@company.com"
-              className="flex-1 px-3 py-2 rounded-xl border border-white/[0.08] bg-white/[0.03] text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-[#00C9B1]/40 transition-all"
-              style={{ fontFamily: "Space Grotesk, sans-serif" }}
-              onKeyDown={e => e.key === "Enter" && handleInvite()}
+              type="text"
+              value={newTeamName}
+              onChange={e => setNewTeamName(e.target.value)}
+              placeholder="Team name (e.g. Finance Team)"
+              maxLength={200}
+              className="flex-1 px-3 py-2.5 rounded-xl border border-white/[0.08] bg-white/[0.03] text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-[#00C9B1]/40 transition-all"
+              style={font}
+              onKeyDown={e => e.key === "Enter" && handleCreateTeam()}
+              autoFocus
             />
             <Button
-              onClick={handleInvite}
-              disabled={!inviteEmail.trim() || inviteMutation.isPending}
+              onClick={handleCreateTeam}
+              disabled={!newTeamName.trim() || createTeamMutation.isPending}
               className="bg-[#00C9B1] hover:bg-[#00C9B1]/80 text-[#0A1628] font-bold px-4"
             >
-              Invite
+              Create
+            </Button>
+            <Button variant="outline" onClick={() => setShowCreate(false)} className="border-white/[0.12] text-white/40 px-4">
+              Cancel
             </Button>
           </div>
-
-          {inviteUrl && (
-            <div className="mt-3 p-3 rounded-xl border border-[#00C9B1]/20 bg-[#00C9B1]/5">
-              <div className="flex items-center gap-1.5 mb-1.5">
-                {emailSent ? (
-                  <><Check size={11} className="text-[#00C9B1]" /><p className="text-[10px] text-[#00C9B1]/70">Invite email sent! Share this link as a backup:</p></>
-                ) : (
-                  <><AlertTriangle size={11} className="text-amber-400" /><p className="text-[10px] text-amber-400/80">Email not sent — share this link manually:</p></>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <p className="text-xs text-white/50 truncate flex-1 font-mono">{inviteUrl}</p>
-                <button
-                  onClick={handleCopy}
-                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[#00C9B1]/10 hover:bg-[#00C9B1]/20 text-[#00C9B1] text-[10px] transition-colors flex-shrink-0"
-                >
-                  {copied ? <Check size={11} /> : <Copy size={11} />}
-                  {copied ? "Copied!" : "Copy"}
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
-      {/* Pending invites */}
-      {isOwner && pendingInvites.length > 0 && (
-        <div className="mb-5">
-          <p className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-2">Pending Invites</p>
-          <div className="space-y-2">
-            {pendingInvites.map(invite => (
-              <div key={invite.id} className="flex items-center gap-3 p-3 rounded-xl border border-amber-400/10 bg-amber-400/5">
-                <Clock size={14} className="text-amber-400 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-white/70">{invite.email}</p>
-                  <p className="text-[10px] text-white/30">Expires {new Date(invite.expiresAt).toLocaleDateString()}</p>
-                </div>
-                <span className="text-[9px] font-semibold text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded-full">Pending</span>
-                <button
-                  onClick={() => handleCancelInvite(invite.id)}
-                  disabled={cancellingId === invite.id}
-                  className="w-7 h-7 flex items-center justify-center rounded-lg text-white/20 hover:text-red-400 hover:bg-red-400/10 transition-colors flex-shrink-0"
-                  title="Cancel invite"
-                >
-                  <Trash2 size={13} />
-                </button>
-              </div>
-            ))}
+      {/* Empty state */}
+      {teamsData.length === 0 && !showCreate && (
+        <div className="p-8 rounded-2xl border border-white/[0.08] bg-white/[0.02] text-center">
+          <div className="w-12 h-12 rounded-2xl bg-[#00C9B1]/10 border border-[#00C9B1]/20 flex items-center justify-center mx-auto mb-4">
+            <Users size={20} className="text-[#00C9B1]" />
           </div>
+          <p className="text-sm font-bold text-white mb-1" style={font}>No teams yet</p>
+          <p className="text-xs text-white/40 mb-4">Create a team to start inviting colleagues and verifying identities.</p>
+          <Button onClick={() => setShowCreate(true)} className="bg-[#00C9B1] hover:bg-[#00C9B1]/80 text-[#0A1628] font-bold">
+            Create Your First Team
+          </Button>
         </div>
       )}
 
-      {/* Member roster */}
-      <div>
-        <p className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-2">Members</p>
-        <div className="space-y-2">
-          {members.map(member => {
-            const isMe = member.userId === user?.id;
-            const memberDisplayName = member.displayName || member.name || member.email || "Unknown";
-            const initials = memberDisplayName.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2);
+      {/* Team cards */}
+      <div className="space-y-4">
+        {teamsData.map(({ team, members, pendingInvites, isOwner }) => {
+          const collapsed = collapsedTeams.has(team.id);
+          const invite = inviteState[team.id] ?? { email: "", url: null, emailSent: null };
 
-            return (
-              <div
-                key={member.userId}
-                className="flex items-center gap-3 p-3 rounded-xl border border-white/[0.06] bg-white/[0.02]"
-              >
-                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-white/[0.06] to-white/[0.02] border border-white/[0.08] flex items-center justify-center flex-shrink-0">
-                  <span className="text-xs font-bold text-white/50">{initials}</span>
+          return (
+            <div key={team.id} className="rounded-2xl border border-white/[0.08] bg-white/[0.02] overflow-hidden">
+
+              {/* Team header */}
+              <div className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => toggleCollapse(team.id)}>
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#00C9B1]/20 to-[#0077B6]/20 border border-[#00C9B1]/20 flex items-center justify-center flex-shrink-0">
+                  <span className="text-sm font-bold text-[#00C9B1]">{team.name.charAt(0).toUpperCase()}</span>
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-white truncate" style={{ fontFamily: "Space Grotesk, sans-serif" }}>
-                      {memberDisplayName}
-                      {isMe && <span className="text-[10px] text-white/30 ml-1">(you)</span>}
-                    </p>
-                    {member.role === "owner" && (
-                      <Crown size={11} className="text-amber-400 flex-shrink-0" />
-                    )}
+                    <p className="text-sm font-bold text-white truncate" style={font}>{team.name}</p>
+                    {isOwner && <Crown size={11} className="text-amber-400 flex-shrink-0" />}
                   </div>
-                  <p className="text-[10px] text-white/30 truncate">{member.email}</p>
+                  <p className="text-[10px] text-white/30">{members.length} member{members.length !== 1 ? "s" : ""}{pendingInvites.length > 0 ? ` · ${pendingInvites.length} pending` : ""}</p>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {member.hasPasskey ? (
-                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#00C9B1]/10 border border-[#00C9B1]/20">
-                      <Shield size={9} className="text-[#00C9B1]" />
-                      <span className="text-[9px] text-[#00C9B1]">Passkey</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-400/10 border border-amber-400/20">
-                      <AlertTriangle size={9} className="text-amber-400" />
-                      <span className="text-[9px] text-amber-400">No Passkey</span>
-                    </div>
-                  )}
-                  {isOwner && !isMe && (
-                    <button
-                      onClick={() => handleRemove(member.userId)}
-                      disabled={removingId === member.userId}
-                      className="w-7 h-7 flex items-center justify-center rounded-lg text-white/20 hover:text-red-400 hover:bg-red-400/10 transition-colors"
-                      title="Remove member"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  )}
-                </div>
+                {collapsed ? <ChevronDown size={15} className="text-white/30 flex-shrink-0" /> : <ChevronUp size={15} className="text-white/30 flex-shrink-0" />}
               </div>
-            );
-          })}
-        </div>
+
+              {!collapsed && (
+                <div className="px-4 pb-4 space-y-4 border-t border-white/[0.06] pt-4">
+
+                  {/* Invite section (owner only) */}
+                  {isOwner && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <UserPlus size={13} className="text-[#00C9B1]" />
+                        <p className="text-xs font-semibold text-white/60 uppercase tracking-wider">Invite</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="email"
+                          value={invite.email}
+                          onChange={e => setInviteState(s => ({ ...s, [team.id]: { ...invite, email: e.target.value } }))}
+                          placeholder="colleague@company.com"
+                          className="flex-1 px-3 py-2 rounded-xl border border-white/[0.08] bg-white/[0.03] text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-[#00C9B1]/40 transition-all"
+                          style={font}
+                          onKeyDown={e => e.key === "Enter" && handleInvite(team.id)}
+                        />
+                        <Button
+                          onClick={() => handleInvite(team.id)}
+                          disabled={!invite.email.trim() || inviteMutation.isPending}
+                          className="bg-[#00C9B1] hover:bg-[#00C9B1]/80 text-[#0A1628] font-bold px-4"
+                        >
+                          Invite
+                        </Button>
+                      </div>
+
+                      {invite.url && (
+                        <div className="mt-2 p-3 rounded-xl border border-[#00C9B1]/20 bg-[#00C9B1]/5">
+                          <div className="flex items-center gap-1.5 mb-1.5">
+                            {invite.emailSent
+                              ? <><Check size={11} className="text-[#00C9B1]" /><p className="text-[10px] text-[#00C9B1]/70">Email sent! Backup link:</p></>
+                              : <><AlertTriangle size={11} className="text-amber-400" /><p className="text-[10px] text-amber-400/80">Email failed — share this link:</p></>
+                            }
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs text-white/50 truncate flex-1 font-mono">{invite.url}</p>
+                            <button
+                              onClick={() => handleCopyInvite(team.id)}
+                              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[#00C9B1]/10 hover:bg-[#00C9B1]/20 text-[#00C9B1] text-[10px] transition-colors flex-shrink-0"
+                            >
+                              {copiedTeamId === team.id ? <Check size={11} /> : <Copy size={11} />}
+                              {copiedTeamId === team.id ? "Copied!" : "Copy"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Pending invites */}
+                  {isOwner && pendingInvites.length > 0 && (
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-white/30 font-semibold mb-2">Pending Invites</p>
+                      <div className="space-y-1.5">
+                        {pendingInvites.map(inv => (
+                          <div key={inv.id} className="flex items-center gap-3 p-2.5 rounded-xl border border-amber-400/10 bg-amber-400/5">
+                            <Clock size={13} className="text-amber-400 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-white/70">{inv.email}</p>
+                              <p className="text-[10px] text-white/30">Expires {new Date(inv.expiresAt).toLocaleDateString()}</p>
+                            </div>
+                            <span className="text-[9px] font-semibold text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded-full">Pending</span>
+                            <button
+                              onClick={() => handleCancelInvite(team.id, inv.id)}
+                              disabled={cancellingId === inv.id}
+                              className="w-6 h-6 flex items-center justify-center rounded-lg text-white/20 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+                              title="Cancel invite"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Members */}
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-white/30 font-semibold mb-2">Members</p>
+                    <div className="space-y-1.5">
+                      {members.map(member => {
+                        const isMe = member.userId === user?.id;
+                        const displayName = member.displayName || member.name || member.email || "Unknown";
+                        const initials = displayName.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2);
+                        return (
+                          <div key={member.userId} className="flex items-center gap-3 p-2.5 rounded-xl border border-white/[0.06] bg-white/[0.02]">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-white/[0.06] to-white/[0.02] border border-white/[0.08] flex items-center justify-center flex-shrink-0">
+                              <span className="text-xs font-bold text-white/50">{initials}</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <p className="text-xs font-medium text-white truncate" style={font}>
+                                  {displayName}
+                                  {isMe && <span className="text-[10px] text-white/30 ml-1">(you)</span>}
+                                </p>
+                                {member.role === "owner" && <Crown size={10} className="text-amber-400 flex-shrink-0" />}
+                              </div>
+                              <p className="text-[10px] text-white/30 truncate">{member.email}</p>
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                              {member.hasPasskey
+                                ? <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[#00C9B1]/10 border border-[#00C9B1]/20"><Shield size={8} className="text-[#00C9B1]" /><span className="text-[9px] text-[#00C9B1]">Passkey</span></div>
+                                : <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-400/10 border border-amber-400/20"><AlertTriangle size={8} className="text-amber-400" /><span className="text-[9px] text-amber-400">No Passkey</span></div>
+                              }
+                              {isOwner && !isMe && (
+                                <button
+                                  onClick={() => handleRemove(team.id, member.userId)}
+                                  disabled={removingId === member.userId}
+                                  className="w-6 h-6 flex items-center justify-center rounded-lg text-white/20 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+                                  title="Remove member"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Footer actions */}
+                  <div className="flex gap-2 pt-1 border-t border-white/[0.06]">
+                    {isOwner
+                      ? <button onClick={() => handleDeleteTeam(team.id, team.name)} className="text-[11px] text-red-400/60 hover:text-red-400 transition-colors">Delete team</button>
+                      : <button onClick={() => handleLeaveTeam(team.id, team.name)} className="text-[11px] text-white/30 hover:text-white/60 transition-colors">Leave team</button>
+                    }
+                  </div>
+
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

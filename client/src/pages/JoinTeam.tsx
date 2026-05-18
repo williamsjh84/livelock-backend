@@ -4,28 +4,21 @@
  */
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { Users, CheckCircle2, XCircle, Loader2, AlertTriangle } from "lucide-react";
+import { Users, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 
 export default function JoinTeam() {
   const [, navigate] = useLocation();
   const [token, setToken] = useState<string | null>(null);
-  const [status, setStatus] = useState<"loading" | "ready" | "confirm-switch" | "success" | "error">("loading");
+  const [status, setStatus] = useState<"loading" | "ready" | "success" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState("");
 
   const { data: user } = trpc.auth.me.useQuery();
 
   const acceptMutation = trpc.teams.acceptInvite.useMutation({
     onSuccess: () => setStatus("success"),
-    onError: (err) => {
-      if (err.message === "You are already a member of a team") {
-        setStatus("confirm-switch");
-      } else {
-        setStatus("error");
-        setErrorMsg(err.message);
-      }
-    },
+    onError: (err) => { setStatus("error"); setErrorMsg(err.message); },
   });
 
   useEffect(() => {
@@ -40,13 +33,13 @@ export default function JoinTeam() {
     }
   }, []);
 
-  const handleAccept = async (forceSwitch = false) => {
+  const handleAccept = async () => {
     if (!token) return;
     if (!user) {
       window.location.href = `/login?return=/join?token=${token}`;
       return;
     }
-    await acceptMutation.mutateAsync({ token, forceSwitch });
+    await acceptMutation.mutateAsync({ token });
   };
 
   // ── Loading ──────────────────────────────────────────────────────────────────
@@ -74,47 +67,6 @@ export default function JoinTeam() {
           >
             Go to Dashboard
           </Button>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Already in a team — offer to switch ─────────────────────────────────────
-  if (status === "confirm-switch") {
-    return (
-      <div className="min-h-screen bg-[#0A1628] flex items-center justify-center p-6">
-        <div className="max-w-sm w-full">
-          <div className="text-center mb-6">
-            <div className="w-16 h-16 rounded-2xl bg-amber-400/10 border border-amber-400/20 flex items-center justify-center mx-auto mb-4">
-              <AlertTriangle size={28} className="text-amber-400" />
-            </div>
-            <h1 className="text-xl font-bold text-white mb-2" style={{ fontFamily: "Space Grotesk, sans-serif" }}>You're already on a team</h1>
-            <p className="text-sm text-white/50 leading-relaxed">
-              Accepting this invite will remove you from your current team and add you to the new one. This cannot be undone.
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            <Button
-              onClick={() => handleAccept(true)}
-              disabled={acceptMutation.isPending}
-              className="w-full bg-amber-500 hover:bg-amber-400 text-white font-bold py-3"
-            >
-              {acceptMutation.isPending ? (
-                <Loader2 size={15} className="mr-2 animate-spin" />
-              ) : (
-                <CheckCircle2 size={15} className="mr-2" />
-              )}
-              Yes, switch teams
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => navigate("/app/team")}
-              className="w-full border-white/[0.12] text-white/50"
-            >
-              Cancel — keep my current team
-            </Button>
-          </div>
         </div>
       </div>
     );
@@ -155,7 +107,7 @@ export default function JoinTeam() {
         </div>
 
         <Button
-          onClick={() => handleAccept(false)}
+          onClick={() => handleAccept()}
           disabled={acceptMutation.isPending}
           className="w-full bg-[#00C9B1] hover:bg-[#00C9B1]/80 text-[#0A1628] font-bold py-3"
         >

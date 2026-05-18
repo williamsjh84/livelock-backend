@@ -140,7 +140,6 @@ export async function createTeam(data: InsertTeam) {
 export async function getTeamByUserId(userId: number) {
   const db = await getDb();
   if (!db) return null;
-  // Find via team_members
   const [membership] = await db
     .select()
     .from(teamMembers)
@@ -149,6 +148,35 @@ export async function getTeamByUserId(userId: number) {
   if (!membership) return null;
   const [team] = await db.select().from(teams).where(eq(teams.id, membership.teamId));
   return team ?? null;
+}
+
+export async function getTeamsByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .select({ team: teams, role: teamMembers.role })
+    .from(teamMembers)
+    .innerJoin(teams, eq(teamMembers.teamId, teams.id))
+    .where(eq(teamMembers.userId, userId));
+  return rows;
+}
+
+export async function getTeamById(teamId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const [team] = await db.select().from(teams).where(eq(teams.id, teamId));
+  return team ?? null;
+}
+
+export async function isTeamMember(teamId: number, userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const [row] = await db
+    .select()
+    .from(teamMembers)
+    .where(and(eq(teamMembers.teamId, teamId), eq(teamMembers.userId, userId)))
+    .limit(1);
+  return !!row;
 }
 
 export async function getTeamMembers(teamId: number) {

@@ -35,6 +35,9 @@ import {
   markInviteUsed,
   deleteInvite,
   getPendingInvitesForTeam,
+  getTeamsByUserId,
+  getTeamById,
+  isTeamMember,
   getAuditLog,
   appendAuditLog,
 } from "./sessionDb";
@@ -190,101 +193,77 @@ const sessionsRouter = router({
 
 const teamsRouter = router({
   /**
-   * Create a new team. The creator becomes the owner.
+   * Create a new team. Users can belong to multiple teams.
    */
   create: protectedProcedure
     .input(z.object({ name: z.string().min(1).max(200) }))
     .mutation(async ({ ctx, input }) => {
-      // Check if user already has a team
-      const existing = await getTeamByUserId(ctx.user.id);
-      if (existing) {
-        throw new TRPCError({ code: "CONFLICT", message: "You are already a member of a team" });
-      }
-
       const team = await createTeam({ name: input.name, ownerId: ctx.user.id });
       if (!team) {
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create team" });
       }
-
-      // Add owner as a member
       await addTeamMember(team.id, ctx.user.id, "owner");
-
       await appendAuditLog({
         teamId: team.id,
         actorId: ctx.user.id,
         action: "team.created",
         metadata: JSON.stringify({ teamName: input.name }),
       });
-
       return team;
     }),
 
   /**
-   * Get the current user's team and its members.
+   * Get all teams the current user belongs to.
    */
   getMyTeam: protectedProcedure.query(async ({ ctx }) => {
-    const team = await getTeamByUserId(ctx.user.id);
-    if (!team) return null;
-
-    const members = await getTeamMembers(team.id);
-    const pendingInvites = await getPendingInvitesForTeam(team.id);
-
-    return {
-      team,
-      members,
-      pendingInvites: pendingInvites.map(i => ({
-        id: i.id,
-        email: i.email,
-        expiresAt: i.expiresAt,
-        createdAt: i.createdAt,
-      })),
-      isOwner: team.ownerId === ctx.user.id,
-    };
+    const memberships = await getTeamsByUserId(ctx.user.id);
+    if (memberships.length === 0) return [];
+    return Promise.all(memberships.map(async ({ team }) => {
+      const members = await getTeamMembers(team.id);
+      const pendingInvites = await getPendingInvitesForTeam(team.id);
+      return {
+        team,
+        members,
+        pendingInvites: pendingInvites.map(i => ({
+          id: i.id,
+          email: i.email,
+          expiresAt: i.expiresAt,
+          createdAt: i.createdAt,
+        })),
+        isOwner: team.ownerId === ctx.user.id,
+      };
+    }));
   }),
 
   /**
-   * Invite a new member to the team by email.
+   * Invite a new member to a specific team by email.
    */
   inviteMember: protectedProcedure
     .input(z.object({
+      teamId: z.number().int().positive(),
       email: z.string().email().max(320),
       origin: z.string().url(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const team = await getTeamByUserId(ctx.user.id);
-      if (!team) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "You are not in a team" });
-      }
+      const team = await getTeamById(input.teamId);
+      if (!team) throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
       if (team.ownerId !== ctx.user.id) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Only the team owner can invite members" });
       }
 
       const token = randomUUID();
-      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-      await createInvite({
-        teamId: team.id,
-        email: input.email,
-        token,
-        invitedByUserId: ctx.user.id,
-        expiresAt,
-      });
+      await createInvite({ teamId: team.id, email: input.email, token, invitedByUserId: ctx.user.id, expiresAt });
 
       const inviteUrl = `${input.origin}/join?token=${token}`;
-
-      // Send invite email (non-fatal — invite is still created even if email fails)
       const inviterName = ctx.user.displayName || ctx.user.name || ctx.user.email || "A teammate";
       const emailSent = await sendTeamInviteEmail({
-        toEmail: input.email,
-        inviterName,
-        teamName: team.name,
-        inviteUrl,
+        toEmail: input.email, inviterName, teamName: team.name, inviteUrl,
       }).catch(err => { console.warn("[Invite] Email send failed:", err); return false; });
 
       await appendAuditLog({
-        teamId: team.id,
-        actorId: ctx.user.id,
-        action: "member.invited",
+        teamId: team.id, actorId: ctx.user.id, action: "member.invited",
         metadata: JSON.stringify({ email: input.email }),
       });
 
@@ -295,20 +274,17 @@ const teamsRouter = router({
    * Cancel a pending invite (owner only).
    */
   cancelInvite: protectedProcedure
-    .input(z.object({ inviteId: z.number() }))
+    .input(z.object({ inviteId: z.number(), teamId: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => {
-      const team = await getTeamByUserId(ctx.user.id);
-      if (!team) throw new TRPCError({ code: "NOT_FOUND", message: "You are not in a team" });
+      const team = await getTeamById(input.teamId);
+      if (!team) throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
       if (team.ownerId !== ctx.user.id) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Only the team owner can cancel invites" });
       }
 
       await deleteInvite(input.inviteId, team.id);
-
       await appendAuditLog({
-        teamId: team.id,
-        actorId: ctx.user.id,
-        action: "member.invite_cancelled",
+        teamId: team.id, actorId: ctx.user.id, action: "member.invite_cancelled",
         metadata: JSON.stringify({ inviteId: input.inviteId }),
       });
 
@@ -317,52 +293,27 @@ const teamsRouter = router({
 
   /**
    * Accept an invite token and join the team.
+   * Users can belong to multiple teams — no restriction on existing membership.
    */
   acceptInvite: protectedProcedure
-    .input(z.object({ token: z.string().uuid(), forceSwitch: z.boolean().optional() }))
+    .input(z.object({ token: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const invite = await getInviteByToken(input.token);
 
-      if (!invite) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Invite not found or already used" });
-      }
-      if (invite.usedAt) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "This invite has already been used" });
-      }
-      if (new Date() > invite.expiresAt) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "This invite has expired" });
-      }
+      if (!invite) throw new TRPCError({ code: "NOT_FOUND", message: "Invite not found or already used" });
+      if (invite.usedAt) throw new TRPCError({ code: "BAD_REQUEST", message: "This invite has already been used" });
+      if (new Date() > invite.expiresAt) throw new TRPCError({ code: "BAD_REQUEST", message: "This invite has expired" });
 
-      // Check if user is already in a team
-      const existing = await getTeamByUserId(ctx.user.id);
-      if (existing) {
-        if (!input.forceSwitch) {
-          throw new TRPCError({ code: "CONFLICT", message: "You are already a member of a team" });
-        }
-        // Owner must delete their team before joining another
-        if (existing.ownerId === ctx.user.id) {
-          throw new TRPCError({
-            code: "CONFLICT",
-            message: "You own a team. Please delete your team before joining another.",
-          });
-        }
-        // Non-owner: leave current team silently then join new one
-        await removeTeamMember(existing.id, ctx.user.id);
-        await appendAuditLog({
-          teamId: existing.id,
-          actorId: ctx.user.id,
-          action: "member.left",
-          metadata: JSON.stringify({ reason: "switched_team" }),
-        });
+      // Prevent joining the same team twice
+      const alreadyMember = await isTeamMember(invite.teamId, ctx.user.id);
+      if (alreadyMember) {
+        throw new TRPCError({ code: "CONFLICT", message: "You are already a member of this team" });
       }
 
       await addTeamMember(invite.teamId, ctx.user.id, "member");
       await markInviteUsed(input.token);
-
       await appendAuditLog({
-        teamId: invite.teamId,
-        actorId: ctx.user.id,
-        action: "member.joined",
+        teamId: invite.teamId, actorId: ctx.user.id, action: "member.joined",
         metadata: JSON.stringify({ email: invite.email }),
       });
 
@@ -370,15 +321,13 @@ const teamsRouter = router({
     }),
 
   /**
-   * Remove a member from the team (owner only).
+   * Remove a member from a specific team (owner only).
    */
   removeMember: protectedProcedure
-    .input(z.object({ userId: z.number().int().positive() }))
+    .input(z.object({ teamId: z.number().int().positive(), userId: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => {
-      const team = await getTeamByUserId(ctx.user.id);
-      if (!team) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
-      }
+      const team = await getTeamById(input.teamId);
+      if (!team) throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
       if (team.ownerId !== ctx.user.id) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Only the team owner can remove members" });
       }
@@ -387,11 +336,8 @@ const teamsRouter = router({
       }
 
       await removeTeamMember(team.id, input.userId);
-
       await appendAuditLog({
-        teamId: team.id,
-        actorId: ctx.user.id,
-        action: "member.removed",
+        teamId: team.id, actorId: ctx.user.id, action: "member.removed",
         metadata: JSON.stringify({ removedUserId: input.userId }),
       });
 
@@ -399,25 +345,20 @@ const teamsRouter = router({
     }),
 
   /**
-   * Rename the team (owner only).
+   * Rename a specific team (owner only).
    */
   updateName: protectedProcedure
-    .input(z.object({ name: z.string().min(1).max(200) }))
+    .input(z.object({ teamId: z.number().int().positive(), name: z.string().min(1).max(200) }))
     .mutation(async ({ ctx, input }) => {
-      const team = await getTeamByUserId(ctx.user.id);
-      if (!team) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
-      }
+      const team = await getTeamById(input.teamId);
+      if (!team) throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
       if (team.ownerId !== ctx.user.id) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Only the team owner can rename the team" });
       }
 
       await updateTeamName(team.id, input.name.trim());
-
       await appendAuditLog({
-        teamId: team.id,
-        actorId: ctx.user.id,
-        action: "team.renamed",
+        teamId: team.id, actorId: ctx.user.id, action: "team.renamed",
         metadata: JSON.stringify({ newName: input.name.trim() }),
       });
 
@@ -425,40 +366,34 @@ const teamsRouter = router({
     }),
 
   /**
-   * Delete the team and remove all members (owner only).
+   * Delete a specific team (owner only).
    */
   deleteTeam: protectedProcedure
-    .mutation(async ({ ctx }) => {
-      const team = await getTeamByUserId(ctx.user.id);
-      if (!team) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
-      }
+    .input(z.object({ teamId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const team = await getTeamById(input.teamId);
+      if (!team) throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
       if (team.ownerId !== ctx.user.id) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Only the team owner can delete the team" });
       }
 
-      // Audit log before deletion so the teamId reference is still valid
       await appendAuditLog({
-        teamId: team.id,
-        actorId: ctx.user.id,
-        action: "team.deleted",
+        teamId: team.id, actorId: ctx.user.id, action: "team.deleted",
         metadata: JSON.stringify({ teamName: team.name }),
       });
-
       await deleteTeamAndMembers(team.id);
 
       return { success: true };
     }),
 
   /**
-   * Leave the team (non-owner members only).
+   * Leave a specific team (non-owner members only).
    */
   leaveTeam: protectedProcedure
-    .mutation(async ({ ctx }) => {
-      const team = await getTeamByUserId(ctx.user.id);
-      if (!team) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "You are not in a team" });
-      }
+    .input(z.object({ teamId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const team = await getTeamById(input.teamId);
+      if (!team) throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
       if (team.ownerId === ctx.user.id) {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -467,11 +402,8 @@ const teamsRouter = router({
       }
 
       await removeTeamMember(team.id, ctx.user.id);
-
       await appendAuditLog({
-        teamId: team.id,
-        actorId: ctx.user.id,
-        action: "member.left",
+        teamId: team.id, actorId: ctx.user.id, action: "member.left",
         metadata: JSON.stringify({ userId: ctx.user.id }),
       });
 
