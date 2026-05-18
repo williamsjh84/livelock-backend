@@ -202,7 +202,172 @@ You're receiving this because you requested early access.
 `;
 }
 
+// ── Team Invite Template ──────────────────────────────────────────────────────
+
+function buildTeamInviteHtml(inviterName: string, teamName: string, inviteUrl: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>You've been invited to join ${teamName} on LiveLock</title>
+</head>
+<body style="margin:0;padding:0;background-color:#0A1628;font-family:'Inter',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0A1628;padding:40px 16px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
+
+          <!-- Header / Logo -->
+          <tr>
+            <td align="center" style="padding-bottom:32px;">
+              <table cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="vertical-align:middle;padding-right:12px;">
+                    <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#00C9B1,#0077B6);display:inline-flex;align-items:center;justify-content:center;">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L3 7V12C3 16.55 6.84 20.74 12 22C17.16 20.74 21 16.55 21 12V7L12 2Z" fill="white"/>
+                      </svg>
+                    </div>
+                  </td>
+                  <td style="vertical-align:middle;">
+                    <p style="margin:0;font-size:20px;font-weight:700;color:#FFFFFF;letter-spacing:-0.3px;">LiveLock</p>
+                    <p style="margin:0;font-size:9px;color:#00C9B1;letter-spacing:2px;text-transform:uppercase;">Human Verification Layer</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Card -->
+          <tr>
+            <td style="background-color:#0F1E35;border-radius:20px;border:1px solid rgba(255,255,255,0.07);padding:40px 36px;">
+
+              <!-- Shield icon -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+                <tr>
+                  <td align="center">
+                    <div style="width:64px;height:64px;border-radius:50%;background-color:rgba(0,201,177,0.1);border:2px solid rgba(0,201,177,0.3);display:inline-flex;align-items:center;justify-content:center;">
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L3 7V12C3 16.55 6.84 20.74 12 22C17.16 20.74 21 16.55 21 12V7L12 2Z" fill="white"/>
+                        <path d="M9 12l2 2 4-4" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Headline -->
+              <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#FFFFFF;text-align:center;letter-spacing:-0.5px;">
+                You've been invited to join<br/><span style="color:#00C9B1;">${teamName}</span>
+              </h1>
+              <p style="margin:0 0 28px;font-size:14px;color:rgba(255,255,255,0.5);text-align:center;line-height:1.6;">
+                <strong style="color:rgba(255,255,255,0.75);">${inviterName}</strong> has invited you to their LiveLock team.<br/>
+                LiveLock protects against social-engineering attacks by requiring human voice verification before high-risk actions.
+              </p>
+
+              <!-- Divider -->
+              <div style="height:1px;background:rgba(255,255,255,0.06);margin-bottom:28px;"></div>
+
+              <!-- CTA Button -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+                <tr>
+                  <td align="center">
+                    <a href="${inviteUrl}" style="display:inline-block;padding:14px 36px;background-color:#00C9B1;color:#0A1628;font-size:14px;font-weight:700;text-decoration:none;border-radius:12px;letter-spacing:0.2px;">
+                      Accept Invitation →
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Fallback link -->
+              <p style="margin:0 0 28px;font-size:11px;color:rgba(255,255,255,0.25);text-align:center;">
+                Or copy this link into your browser:<br/>
+                <span style="color:rgba(0,201,177,0.6);word-break:break-all;">${inviteUrl}</span>
+              </p>
+
+              <!-- Divider -->
+              <div style="height:1px;background:rgba(255,255,255,0.06);margin-bottom:20px;"></div>
+
+              <p style="margin:0;font-size:11px;color:rgba(255,255,255,0.25);text-align:center;">
+                This invite expires in 7 days. If you weren't expecting this, you can safely ignore it.
+              </p>
+
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td align="center" style="padding-top:28px;">
+              <p style="margin:0 0 6px;font-size:11px;color:rgba(255,255,255,0.2);">
+                LiveLock · Human Verification Layer · livelock.io
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+function buildTeamInviteText(inviterName: string, teamName: string, inviteUrl: string): string {
+  return `${inviterName} has invited you to join ${teamName} on LiveLock.
+
+LiveLock protects against social-engineering attacks by requiring human voice verification before high-risk actions.
+
+Accept your invitation here:
+${inviteUrl}
+
+This invite expires in 7 days.
+
+—
+LiveLock · Human Verification Layer · livelock.io
+`;
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
+
+export interface TeamInviteEmailParams {
+  toEmail: string;
+  inviterName: string;
+  teamName: string;
+  inviteUrl: string;
+}
+
+/**
+ * Sends a branded team invite email to the invited address.
+ * Returns true on success, false on any failure (non-throwing).
+ */
+export async function sendTeamInviteEmail(params: TeamInviteEmailParams): Promise<boolean> {
+  const client = getResendClient();
+  if (!client) return false;
+
+  const { toEmail, inviterName, teamName, inviteUrl } = params;
+
+  try {
+    const { error } = await client.emails.send({
+      from: "LiveLock <onboarding@resend.dev>",
+      to: [toEmail],
+      subject: `${inviterName} invited you to join ${teamName} on LiveLock`,
+      html: buildTeamInviteHtml(inviterName, teamName, inviteUrl),
+      text: buildTeamInviteText(inviterName, teamName, inviteUrl),
+    });
+
+    if (error) {
+      console.warn("[Email] Resend returned an error sending invite:", error);
+      return false;
+    }
+
+    console.info(`[Email] Team invite sent to ${toEmail}`);
+    return true;
+  } catch (err) {
+    console.warn("[Email] Failed to send team invite email:", err);
+    return false;
+  }
+}
 
 export interface EarlyAccessEmailParams {
   toEmail: string;

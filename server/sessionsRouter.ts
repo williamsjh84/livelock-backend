@@ -40,6 +40,7 @@ import {
 import { getDb } from "./db";
 import { users } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
+import { sendTeamInviteEmail } from "./email";
 
 // ── Sessions Router ───────────────────────────────────────────────────────────
 
@@ -270,6 +271,15 @@ const teamsRouter = router({
 
       const inviteUrl = `${input.origin}/join?token=${token}`;
 
+      // Send invite email (non-fatal — invite is still created even if email fails)
+      const inviterName = ctx.user.displayName || ctx.user.name || ctx.user.email || "A teammate";
+      await sendTeamInviteEmail({
+        toEmail: input.email,
+        inviterName,
+        teamName: team.name,
+        inviteUrl,
+      }).catch(err => console.warn("[Invite] Email send failed:", err));
+
       await appendAuditLog({
         teamId: team.id,
         actorId: ctx.user.id,
@@ -277,7 +287,6 @@ const teamsRouter = router({
         metadata: JSON.stringify({ email: input.email }),
       });
 
-      // Return the invite URL (email sending can be added later)
       return { inviteUrl, token, expiresAt };
     }),
 
