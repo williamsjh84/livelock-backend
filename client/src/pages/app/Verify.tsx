@@ -229,7 +229,10 @@ export default function Verify() {
   };
 
   const isInitiator = session ? session.initiatorId === user?.id : false;
-  const teamMembers = teamData?.members?.filter(m => m.userId !== user?.id) ?? [];
+  // Aggregate members from all teams, deduped by userId, excluding self
+  const teamMembers = [...new Map(
+    (teamData ?? []).flatMap(t => t.members).map(m => [m.userId, m])
+  ).values()].filter(m => m.userId !== user?.id);
 
   // ── Terminal states ────────────────────────────────────────────────────────
 

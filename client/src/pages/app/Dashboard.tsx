@@ -32,12 +32,23 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function Dashboard() {
-  const { data: teamData } = trpc.teams.getMyTeam.useQuery();
+  const { data: teamsData = [] } = trpc.teams.getMyTeam.useQuery();
   const { data: historyData } = trpc.sessions.history.useQuery({ limit: 5, offset: 0 });
   const { data: activeSession } = trpc.sessions.getActive.useQuery();
 
   const recentSessions = historyData ?? [];
-  const memberCount = teamData?.members?.length ?? 0;
+  const hasTeam = teamsData.length > 0;
+  // Total unique members across all teams (deduped by userId)
+  const allMemberIds = new Set(teamsData.flatMap(t => t.members.map(m => m.userId)));
+  const memberCount = allMemberIds.size;
+  // Label for the Team Status stat
+  const teamStatusSub = !hasTeam
+    ? "Create or join a team"
+    : teamsData.length === 1
+      ? teamsData[0].team.name
+      : `${teamsData.length} teams`;
+  // Quick-verify is available if any team has >1 member
+  const canVerify = teamsData.some(t => t.members.length > 1);
   const verifiedCount = recentSessions.filter(s => s.status === "verified").length;
 
   return (
@@ -73,15 +84,15 @@ export default function Dashboard() {
         <StatCard label="Recent Verified" value={verifiedCount} sub="of last 5 sessions" color="text-[#00C9B1]" />
         <StatCard
           label="Team Status"
-          value={teamData ? "Active" : "No Team"}
-          sub={teamData ? teamData.team.name : "Create or join a team"}
-          color={teamData ? "text-[#00C9B1]" : "text-amber-400"}
+          value={hasTeam ? "Active" : "No Team"}
+          sub={teamStatusSub}
+          color={hasTeam ? "text-[#00C9B1]" : "text-amber-400"}
         />
       </div>
 
       {/* Quick Verify CTA */}
       <div className="mb-6">
-        {teamData && teamData.members.length > 1 ? (
+        {canVerify ? (
           <Link href="/app/verify">
             <div className="p-5 rounded-2xl border border-[#00C9B1]/20 bg-[#00C9B1]/5 hover:bg-[#00C9B1]/10 transition-all cursor-pointer group">
               <div className="flex items-center gap-3">
@@ -105,10 +116,10 @@ export default function Dashboard() {
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-bold text-white" style={{ fontFamily: "Space Grotesk, sans-serif" }}>
-                    {!teamData ? "Create Your Team" : "Invite Teammates"}
+                    {!hasTeam ? "Create Your Team" : "Invite Teammates"}
                   </p>
                   <p className="text-xs text-white/40">
-                    {!teamData
+                    {!hasTeam
                       ? "Set up a team to start verifying identities"
                       : "You need at least one other member to start verifying"}
                   </p>
