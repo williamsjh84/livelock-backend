@@ -349,7 +349,7 @@ export async function sendTeamInviteEmail(params: TeamInviteEmailParams): Promis
 
   try {
     const { error } = await client.emails.send({
-      from: "LiveLock <onboarding@resend.dev>",
+      from: "LiveLock <team@livelock.io>",
       to: [toEmail],
       subject: `${inviterName} invited you to join ${teamName} on LiveLock`,
       html: buildTeamInviteHtml(inviterName, teamName, inviteUrl),
@@ -389,7 +389,7 @@ export async function sendEarlyAccessConfirmation(
 
   try {
     const { error } = await client.emails.send({
-      from: "LiveLock <onboarding@resend.dev>",
+      from: "LiveLock <team@livelock.io>",
       to: [toEmail],
       subject: `You're on the LiveLock waitlist, ${firstName} 🔒`,
       html: buildEarlyAccessConfirmationHtml(firstName, company),
