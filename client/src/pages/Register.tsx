@@ -22,8 +22,14 @@ function getDeviceName(): string {
   return "My Device";
 }
 
+function getReturnUrl(): string {
+  const params = new URLSearchParams(window.location.search);
+  const ret = params.get("return");
+  if (ret && ret.startsWith("/")) return ret;
+  return "/app/dashboard";
+}
+
 export default function Register() {
-  const [, setLocation] = useLocation();
   const [method, setMethod] = useState<Method>("passkey");
   const [step, setStep] = useState<Step>("form");
   const [email, setEmail] = useState("");
@@ -69,7 +75,7 @@ export default function Register() {
 
       await verifyRegistration.mutateAsync({ userId, response: registrationResponse, deviceName: getDeviceName() });
       setStep("success");
-      setTimeout(() => setLocation("/app/dashboard"), 2000);
+      setTimeout(() => { window.location.href = getReturnUrl(); }, 2000);
     } catch (err: any) {
       setErrorMsg(err?.message ?? "Registration failed. Please try again.");
       setStep("error");
@@ -96,7 +102,7 @@ export default function Register() {
     try {
       await passwordRegister.mutateAsync({ email, displayName, password });
       setStep("success");
-      setTimeout(() => { window.location.href = "/app/dashboard"; }, 1000);
+      setTimeout(() => { window.location.href = getReturnUrl(); }, 1000);
     } catch (err: any) {
       setErrorMsg(err?.message ?? "Registration failed. Please try again.");
       setStep("error");
