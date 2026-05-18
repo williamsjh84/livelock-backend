@@ -6,11 +6,11 @@
 import { z } from "zod";
 import { router, publicProcedure } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
-import { SignJWT } from "jose";
 import { getDb } from "./db";
 import { users } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { ENV } from "./_core/env";
+import { sdk } from "./_core/sdk";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import * as crypto from "crypto";
@@ -28,12 +28,14 @@ function verifyPassword(password: string, salt: string, hash: string): boolean {
   return hashPassword(password, salt) === hash;
 }
 
-async function createJWT(userId: number): Promise<string> {
-  const secretKey = new TextEncoder().encode(ENV.cookieSecret);
-  return new SignJWT({ userId })
-    .setProtectedHeader({ alg: "HS256" })
-    .setExpirationTime("365d")
-    .sign(secretKey);
+/**
+ * Create a session token in the same { openId, appId, name } format that
+ * sdk.authenticateRequest expects. This makes the token valid for both:
+ *   - Web (cookie path):   sdk.authenticateRequest reads openId → looks up user
+ *   - Mobile (Bearer path): getUserFromBearerToken reads openId → looks up user
+ */
+async function createSessionToken(openId: string, name: string): Promise<string> {
+  return sdk.signSession({ openId, appId: ENV.appId, name });
 }
 
 export const passwordRouter = router({
@@ -86,7 +88,7 @@ export const passwordRouter = router({
 
       if (!newUser[0]) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create user" });
 
-      const token = await createJWT(newUser[0].id);
+      const token = await createSessionToken(newUser[0].openId, newUser[0].displayName || newUser[0].email || "");
 
       // Set session cookie so web app auth works immediately after register
       const cookieOptions = getSessionCookieOptions(ctx.req);
@@ -138,7 +140,7 @@ export const passwordRouter = router({
       // Update last signed in
       await db.update(users).set({ lastSignedIn: new Date() }).where(eq(users.id, user.id));
 
-      const token = await createJWT(user.id);
+      const token = await createSessionToken(user.openId, user.displayName || user.email || "");
 
       // Set session cookie so web app auth works immediately after login
       const cookieOptions = getSessionCookieOptions(ctx.req);
