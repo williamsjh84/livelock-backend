@@ -119,37 +119,49 @@ export default function JoinTeam() {
           <div className="w-16 h-16 rounded-2xl bg-[#00C9B1]/10 border border-[#00C9B1]/20 flex items-center justify-center mx-auto mb-4">
             <Users size={28} className="text-[#00C9B1]" />
           </div>
-          <h1 className="text-xl font-bold text-white mb-2" style={font}>Team Invite</h1>
+          <h1 className="text-xl font-bold text-white mb-2" style={font}>You've been invited!</h1>
           <p className="text-sm text-white/50">
             {user
               ? `Signed in as ${user.email || user.displayName || "you"}. Click below to join the team.`
-              : "You've been invited to join a LiveLock team. Sign in or create an account to accept."}
+              : "You've been invited to join a LiveLock team."}
           </p>
         </div>
 
         <div className="space-y-3">
-          <Button
-            onClick={handleAccept}
-            disabled={acceptMutation.isPending}
-            className="w-full bg-[#00C9B1] hover:bg-[#00C9B1]/80 text-[#0A1628] font-bold py-3"
-          >
-            {acceptMutation.isPending
-              ? <Loader2 size={15} className="mr-2 animate-spin" />
-              : user
-                ? <CheckCircle2 size={15} className="mr-2" />
-                : <LogIn size={15} className="mr-2" />
-            }
-            {user ? "Accept Invite" : "Sign In & Accept"}
-          </Button>
-
-          {!user && (
+          {user ? (
+            /* Already logged in — just accept */
             <Button
-              variant="outline"
-              onClick={() => navigate(`/register?return=${encodeURIComponent(`/join?token=${token}`)}`)}
-              className="w-full border-white/[0.12] text-white/50"
+              onClick={handleAccept}
+              disabled={acceptMutation.isPending}
+              className="w-full bg-[#00C9B1] hover:bg-[#00C9B1]/80 text-[#0A1628] font-bold py-3"
             >
-              Create an account instead
+              {acceptMutation.isPending
+                ? <Loader2 size={15} className="mr-2 animate-spin" />
+                : <CheckCircle2 size={15} className="mr-2" />
+              }
+              Accept Invite
             </Button>
+          ) : (
+            <>
+              {/* New user — primary action */}
+              <Button
+                onClick={() => navigate(`/register?return=${encodeURIComponent(`/join?token=${token}`)}`)}
+                className="w-full bg-[#00C9B1] hover:bg-[#00C9B1]/80 text-[#0A1628] font-bold py-3"
+              >
+                <CheckCircle2 size={15} className="mr-2" />
+                Create Account & Accept
+              </Button>
+
+              {/* Already have an account — secondary action */}
+              <Button
+                variant="outline"
+                onClick={handleAccept}
+                className="w-full border-white/[0.12] text-white/60 hover:text-white"
+              >
+                <LogIn size={15} className="mr-2" />
+                I already have an account
+              </Button>
+            </>
           )}
         </div>
       </div>
