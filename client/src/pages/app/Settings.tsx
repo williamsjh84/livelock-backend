@@ -3,7 +3,7 @@
  * Manage passkeys, display name, and account info.
  */
 import { useState, useEffect } from "react";
-import { Shield, Plus, Trash2, Smartphone, Monitor, Key, User, CheckCircle2, Bell, BellOff, MessageSquare } from "lucide-react";
+import { Shield, Plus, Trash2, Smartphone, Monitor, Key, User, CheckCircle2, Bell, MessageSquare, Phone } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { startRegistration } from "@simplewebauthn/browser";
@@ -35,6 +35,7 @@ export default function Settings() {
   useEffect(() => {
     if (user) {
       setPhone(user.phone ?? "");
+      setPhoneInput(user.phone ?? "");
       setSmsEnabled(user.smsNotifications ?? false);
     }
   }, [user]);
@@ -44,6 +45,10 @@ export default function Settings() {
   const [editingName, setEditingName] = useState(false);
   const [displayName, setDisplayName] = useState(user?.displayName ?? user?.name ?? "");
   const [nameError, setNameError] = useState("");
+  const [editingPhone, setEditingPhone] = useState(false);
+  const [phoneInput, setPhoneInput] = useState(user?.phone ?? "");
+  const [phoneError, setPhoneError] = useState("");
+  const [phoneSaved, setPhoneSaved] = useState(false);
 
   const handleAddPasskey = async () => {
     if (!user?.email) return;
@@ -146,6 +151,62 @@ export default function Settings() {
               </div>
             )}
             {nameError && <p className="text-[10px] text-red-400 mt-1">{nameError}</p>}
+          </div>
+
+          {/* Phone number */}
+          <div>
+            <p className="text-[10px] text-white/30 mb-1">Mobile Number</p>
+            {editingPhone ? (
+              <div className="flex gap-2">
+                <input
+                  type="tel"
+                  value={phoneInput}
+                  onChange={e => { setPhoneInput(e.target.value); setPhoneError(""); }}
+                  placeholder="+12125551234"
+                  maxLength={20}
+                  className="flex-1 px-3 py-1.5 rounded-xl border border-white/[0.08] bg-white/[0.03] text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-[#00C9B1]/40 transition-all"
+                  style={{ fontFamily: "Space Grotesk, sans-serif" }}
+                />
+                <Button
+                  size="sm"
+                  className="bg-[#00C9B1] hover:bg-[#00C9B1]/80 text-[#0A1628] font-bold"
+                  onClick={async () => {
+                    try {
+                      await updateSmsMutation.mutateAsync({ phone: phoneInput.trim() || null, smsNotifications: smsEnabled });
+                      setPhone(phoneInput.trim());
+                      setEditingPhone(false);
+                      setPhoneSaved(true);
+                      setTimeout(() => setPhoneSaved(false), 3000);
+                      refetchUser();
+                    } catch (err: unknown) {
+                      setPhoneError(err instanceof Error ? err.message : "Failed to save");
+                    }
+                  }}
+                  disabled={updateSmsMutation.isPending}
+                >
+                  Save
+                </Button>
+                <Button size="sm" variant="outline" className="border-white/[0.08] text-white/40" onClick={() => { setEditingPhone(false); setPhoneInput(phone); }}>
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
+                  <Phone size={12} className="text-white/25" />
+                  <p className="text-sm text-white/70">{phone || <span className="text-white/25 italic">Not set</span>}</p>
+                </div>
+                {phoneSaved && <CheckCircle2 size={12} className="text-[#00C9B1]" />}
+                <button
+                  onClick={() => { setPhoneInput(phone); setEditingPhone(true); }}
+                  className="text-[10px] text-[#00C9B1]/60 hover:text-[#00C9B1] transition-colors"
+                >
+                  {phone ? "Edit" : "Add"}
+                </button>
+              </div>
+            )}
+            {phoneError && <p className="text-[10px] text-red-400 mt-1">{phoneError}</p>}
+            <p className="text-[10px] text-white/20 mt-1">Used for SMS verification alerts. Include country code, e.g. +12125551234</p>
           </div>
         </div>
       </div>
@@ -282,50 +343,43 @@ export default function Settings() {
           <p className="text-sm font-bold text-white" style={{ fontFamily: "Space Grotesk, sans-serif" }}>SMS Notifications</p>
         </div>
 
-        <div className="space-y-3">
-          <div>
-            <label className="text-[10px] text-white/30 mb-1 block">Phone number</label>
-            <input
-              type="tel"
-              value={phone}
-              onChange={e => { setPhone(e.target.value); setSmsSaved(false); }}
-              placeholder="+1 212 555 1234"
-              maxLength={20}
-              className="w-full px-3 py-2 rounded-xl border border-white/[0.08] bg-white/[0.03] text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-[#00C9B1]/40 transition-all"
-              style={{ fontFamily: "Space Grotesk, sans-serif" }}
-            />
-            <p className="text-[10px] text-white/20 mt-1">Include country code, e.g. +12125551234</p>
+        {!phone.trim() ? (
+          <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+            <p className="text-xs text-white/40 leading-relaxed">
+              Add a mobile number in your <span className="text-[#00C9B1]">Profile</span> above to enable SMS alerts.
+            </p>
           </div>
-
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-white/70">Text me when someone wants to verify</p>
-              <p className="text-[10px] text-white/30 mt-0.5">Standard messaging rates may apply</p>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-white/70">Text me when someone wants to verify</p>
+                <p className="text-[10px] text-white/30 mt-0.5">Sent to {phone} · Standard rates may apply</p>
+              </div>
+              <button
+                onClick={() => { setSmsEnabled(v => !v); setSmsSaved(false); }}
+                className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${
+                  smsEnabled ? "bg-[#00C9B1]" : "bg-white/[0.10]"
+                }`}
+              >
+                <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${smsEnabled ? "translate-x-5" : "translate-x-0"}`} />
+              </button>
             </div>
-            <button
-              onClick={() => { setSmsEnabled(v => !v); setSmsSaved(false); }}
-              disabled={!phone.trim()}
-              className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${
-                smsEnabled && phone.trim() ? "bg-[#00C9B1]" : "bg-white/[0.10]"
-              } disabled:opacity-40`}
-            >
-              <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${smsEnabled && phone.trim() ? "translate-x-5" : "translate-x-0"}`} />
-            </button>
-          </div>
 
-          <Button
-            onClick={async () => {
-              await updateSmsMutation.mutateAsync({ phone: phone.trim() || null, smsNotifications: smsEnabled });
-              setSmsSaved(true);
-              setTimeout(() => setSmsSaved(false), 3000);
-            }}
-            disabled={updateSmsMutation.isPending}
-            className="w-full bg-white/[0.06] hover:bg-white/[0.10] border border-white/[0.10] text-white/70 hover:text-white"
-            variant="outline"
-          >
-            {smsSaved ? <><CheckCircle2 size={14} className="mr-2 text-[#00C9B1]" />Saved</> : updateSmsMutation.isPending ? "Saving…" : "Save SMS settings"}
-          </Button>
-        </div>
+            <Button
+              onClick={async () => {
+                await updateSmsMutation.mutateAsync({ phone: phone.trim() || null, smsNotifications: smsEnabled });
+                setSmsSaved(true);
+                setTimeout(() => setSmsSaved(false), 3000);
+              }}
+              disabled={updateSmsMutation.isPending}
+              className="w-full bg-white/[0.06] hover:bg-white/[0.10] border border-white/[0.10] text-white/70 hover:text-white"
+              variant="outline"
+            >
+              {smsSaved ? <><CheckCircle2 size={14} className="mr-2 text-[#00C9B1]" />Saved</> : updateSmsMutation.isPending ? "Saving…" : "Save SMS settings"}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
