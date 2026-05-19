@@ -369,6 +369,207 @@ export async function sendTeamInviteEmail(params: TeamInviteEmailParams): Promis
   }
 }
 
+// ── Welcome Email Template ────────────────────────────────────────────────────
+
+function buildWelcomeHtml(displayName: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Welcome to LiveLock</title>
+</head>
+<body style="margin:0;padding:0;background-color:#0A1628;font-family:'Inter',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0A1628;padding:40px 16px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
+
+          <!-- Header / Logo -->
+          <tr>
+            <td align="center" style="padding-bottom:32px;">
+              <table cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="vertical-align:middle;padding-right:12px;">
+                    <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#00C9B1,#0077B6);display:inline-flex;align-items:center;justify-content:center;">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L3 7V12C3 16.55 6.84 20.74 12 22C17.16 20.74 21 16.55 21 12V7L12 2Z" fill="white"/>
+                      </svg>
+                    </div>
+                  </td>
+                  <td style="vertical-align:middle;">
+                    <p style="margin:0;font-size:20px;font-weight:700;color:#FFFFFF;letter-spacing:-0.3px;">LiveLock</p>
+                    <p style="margin:0;font-size:9px;color:#00C9B1;letter-spacing:2px;text-transform:uppercase;">Human Verification Layer</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Card -->
+          <tr>
+            <td style="background-color:#0F1E35;border-radius:20px;border:1px solid rgba(255,255,255,0.07);padding:40px 36px;">
+
+              <!-- Check icon -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+                <tr>
+                  <td align="center">
+                    <div style="width:64px;height:64px;border-radius:50%;background-color:rgba(0,201,177,0.1);border:2px solid rgba(0,201,177,0.3);display:inline-flex;align-items:center;justify-content:center;">
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M20 6L9 17L4 12" stroke="#00C9B1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Headline -->
+              <h1 style="margin:0 0 8px;font-size:26px;font-weight:700;color:#FFFFFF;text-align:center;letter-spacing:-0.5px;">
+                Welcome to LiveLock, ${displayName}.
+              </h1>
+              <p style="margin:0 0 28px;font-size:14px;color:rgba(255,255,255,0.5);text-align:center;line-height:1.6;">
+                Your account is set up and ready to go.<br/>
+                You can now verify and be verified by your teammates.
+              </p>
+
+              <!-- Divider -->
+              <div style="height:1px;background:rgba(255,255,255,0.06);margin-bottom:28px;"></div>
+
+              <!-- What's next -->
+              <p style="margin:0 0 16px;font-size:10px;font-weight:600;color:rgba(0,201,177,0.7);letter-spacing:2px;text-transform:uppercase;">
+                Get started
+              </p>
+
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:14px;">
+                <tr>
+                  <td width="28" valign="top">
+                    <div style="width:20px;height:20px;border-radius:50%;background-color:rgba(0,201,177,0.12);border:1px solid rgba(0,201,177,0.3);text-align:center;line-height:20px;">
+                      <span style="font-size:9px;font-weight:700;color:#00C9B1;">1</span>
+                    </div>
+                  </td>
+                  <td style="padding-left:10px;">
+                    <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.5);line-height:1.5;">Go to your dashboard and create or join a team</p>
+                  </td>
+                </tr>
+              </table>
+
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:14px;">
+                <tr>
+                  <td width="28" valign="top">
+                    <div style="width:20px;height:20px;border-radius:50%;background-color:rgba(0,201,177,0.12);border:1px solid rgba(0,201,177,0.3);text-align:center;line-height:20px;">
+                      <span style="font-size:9px;font-weight:700;color:#00C9B1;">2</span>
+                    </div>
+                  </td>
+                  <td style="padding-left:10px;">
+                    <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.5);line-height:1.5;">Invite teammates so they can verify you</p>
+                  </td>
+                </tr>
+              </table>
+
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+                <tr>
+                  <td width="28" valign="top">
+                    <div style="width:20px;height:20px;border-radius:50%;background-color:rgba(0,201,177,0.12);border:1px solid rgba(0,201,177,0.3);text-align:center;line-height:20px;">
+                      <span style="font-size:9px;font-weight:700;color:#00C9B1;">3</span>
+                    </div>
+                  </td>
+                  <td style="padding-left:10px;">
+                    <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.5);line-height:1.5;">Run your first live verification — takes under 10 seconds</p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Divider -->
+              <div style="height:1px;background:rgba(255,255,255,0.06);margin-bottom:28px;"></div>
+
+              <!-- CTA -->
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center">
+                    <a href="https://livelock.io/app/dashboard" style="display:inline-block;padding:13px 32px;background-color:#00C9B1;color:#0A1628;font-size:13px;font-weight:700;text-decoration:none;border-radius:12px;letter-spacing:0.2px;">
+                      Go to Dashboard →
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td align="center" style="padding-top:28px;">
+              <p style="margin:0 0 6px;font-size:11px;color:rgba(255,255,255,0.2);">
+                LiveLock · Human Verification Layer · livelock.io
+              </p>
+              <p style="margin:0;font-size:10px;color:rgba(255,255,255,0.15);">
+                You're receiving this because you just created a LiveLock account.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+function buildWelcomeText(displayName: string): string {
+  return `Welcome to LiveLock, ${displayName}!
+
+Your account is set up and ready to go. You can now verify and be verified by your teammates.
+
+Get started:
+1. Go to your dashboard and create or join a team
+2. Invite teammates so they can verify you
+3. Run your first live verification — takes under 10 seconds
+
+Go to your dashboard: https://livelock.io/app/dashboard
+
+—
+LiveLock · Human Verification Layer · livelock.io
+`;
+}
+
+export interface WelcomeEmailParams {
+  toEmail: string;
+  displayName: string;
+}
+
+/**
+ * Sends a welcome email after a new account is created.
+ * Returns true on success, false on any failure (non-throwing).
+ */
+export async function sendWelcomeEmail(params: WelcomeEmailParams): Promise<boolean> {
+  const client = getResendClient();
+  if (!client) return false;
+
+  const { toEmail, displayName } = params;
+
+  try {
+    const { error } = await client.emails.send({
+      from: "LiveLock <team@livelock.io>",
+      to: [toEmail],
+      subject: `Welcome to LiveLock, ${displayName} 🔒`,
+      html: buildWelcomeHtml(displayName),
+      text: buildWelcomeText(displayName),
+    });
+
+    if (error) {
+      console.warn("[Email] Resend error sending welcome email:", error);
+      return false;
+    }
+
+    console.info(`[Email] Welcome email sent to ${toEmail}`);
+    return true;
+  } catch (err) {
+    console.warn("[Email] Failed to send welcome email:", err);
+    return false;
+  }
+}
+
 export interface EarlyAccessEmailParams {
   toEmail: string;
   firstName: string;

@@ -43,6 +43,7 @@ import {
   updateCredentialCounter,
 } from "./webauthnDb";
 import { sdk } from "./_core/sdk";
+import { sendWelcomeEmail } from "./email";
 
 // The Relying Party (RP) details — must match the domain in production
 //
@@ -217,13 +218,25 @@ export const webauthnRouter = router({
 
       // Mark user as having a passkey
       const db = await getDb();
-      if (db) {
-        await db.update(users).set({ hasPasskey: true }).where(eq(users.id, input.userId));
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+      // Fetch user before update so we can detect first-time registration
+      const userBefore = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
+      const isNewAccount = !userBefore[0]?.hasPasskey;
+
+      await db.update(users).set({ hasPasskey: true }).where(eq(users.id, input.userId));
 
       // Issue a session JWT and set the cookie
-      const user = await (await getDb())?.select().from(users).where(eq(users.id, input.userId)).limit(1);
+      const user = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
       if (!user || user.length === 0) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "User not found" });
+
+      // Send welcome email only on first passkey registration (non-fatal)
+      if (isNewAccount && user[0].email) {
+        sendWelcomeEmail({
+          toEmail: user[0].email,
+          displayName: user[0].displayName ?? user[0].name ?? "there",
+        }).catch(() => {});
+      }
 
       const sessionToken = await sdk.createSessionToken(user[0].openId, {
         name: user[0].displayName ?? user[0].name ?? "",

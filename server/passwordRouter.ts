@@ -14,6 +14,7 @@ import { sdk } from "./_core/sdk";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import * as crypto from "crypto";
+import { sendWelcomeEmail } from "./email";
 
 // Simple password hashing using Node's built-in crypto (no bcrypt dependency needed)
 function hashPassword(password: string, salt: string): string {
@@ -89,6 +90,12 @@ export const passwordRouter = router({
       if (!newUser[0]) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create user" });
 
       const token = await createSessionToken(newUser[0].openId, newUser[0].displayName || newUser[0].email || "");
+
+      // Send welcome email (non-fatal)
+      sendWelcomeEmail({
+        toEmail: email,
+        displayName: input.displayName.trim(),
+      }).catch(() => {});
 
       // Set session cookie so web app auth works immediately after register
       const cookieOptions = getSessionCookieOptions(ctx.req);
