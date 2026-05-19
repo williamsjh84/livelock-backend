@@ -30,7 +30,8 @@ function getReturnUrl(): string {
 }
 
 export default function Register() {
-  const [method, setMethod] = useState<Method>("passkey");
+  // Default to password — most invitees won't have passkeys set up yet
+  const [method, setMethod] = useState<Method>("password");
   const [step, setStep] = useState<Step>("form");
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
