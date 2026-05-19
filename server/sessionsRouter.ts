@@ -18,6 +18,9 @@ import { randomUUID } from "crypto";
 import { z } from "zod";
 import { protectedProcedure, router } from "./_core/trpc";
 import { generateWordPair, cryptoShuffle } from "./wordPairs";
+import { sendVerificationNotificationEmail } from "./email";
+import { sendPushNotification } from "./push";
+import { sendSms } from "./sms";
 import {
   createSession,
   getSessionById,
@@ -43,7 +46,7 @@ import {
   appendAuditLog,
 } from "./sessionDb";
 import { getDb } from "./db";
-import { users } from "../drizzle/schema";
+import { pushSubscriptions, users } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { sendTeamInviteEmail } from "./email";
 
@@ -107,6 +110,46 @@ const sessionsRouter = router({
           actionContext: input.actionContext,
         }),
       });
+
+      // ── Fire-and-forget notifications to the responder ───────────────────
+      const initiatorName = ctx.user.displayName ?? ctx.user.name ?? "A teammate";
+      const actionCtx = input.actionContext ?? null;
+
+      // Fetch responder for email + SMS
+      const db = await getDb();
+      if (db) {
+        db.select().from(users).where(eq(users.id, input.responderId)).limit(1).then(rows => {
+          const responder = rows[0];
+          if (!responder) return;
+
+          // Email notification
+          if (responder.email) {
+            sendVerificationNotificationEmail(responder.email, initiatorName, actionCtx).catch(() => {});
+          }
+
+          // SMS notification
+          if (responder.smsNotifications && responder.phone) {
+            const smsBody = actionCtx
+              ? `${initiatorName} wants to verify you on LiveLock (${actionCtx}). Open the app now — session expires in 90s.`
+              : `${initiatorName} wants to verify you on LiveLock. Open the app now — session expires in 90s.`;
+            sendSms(responder.phone, smsBody).catch(() => {});
+          }
+        }).catch(() => {});
+
+        // Web Push notification
+        db.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, input.responderId)).then(subs => {
+          subs.forEach(sub => {
+            sendPushNotification(
+              { endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth },
+              {
+                title: `${initiatorName} wants to verify you`,
+                body: actionCtx ? `Action: ${actionCtx}` : "Open LiveLock to respond — 90 seconds",
+                url: "/app/verify",
+              }
+            ).catch(() => {});
+          });
+        }).catch(() => {});
+      }
 
       return {
         sessionId: session.id,

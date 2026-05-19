@@ -14,7 +14,9 @@ import { sdk } from "./_core/sdk";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import * as crypto from "crypto";
-import { sendWelcomeEmail } from "./email";
+import { sendWelcomeEmail, sendPasswordResetEmail } from "./email";
+import { passwordResetTokens } from "../drizzle/schema";
+import { and, isNull, gt } from "drizzle-orm";
 
 // Simple password hashing using Node's built-in crypto (no bcrypt dependency needed)
 function hashPassword(password: string, salt: string): string {
@@ -110,6 +112,72 @@ export const passwordRouter = router({
           hasPasskey: false,
         },
       };
+    }),
+
+  forgotPassword: publicProcedure
+    .input(z.object({ email: z.string().email().max(320) }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const email = input.email.toLowerCase().trim();
+
+      // Look up user — silently succeed even if not found (don't leak existence)
+      const rows = await db.select().from(users).where(eq(users.email, email)).limit(1);
+      const user = rows[0];
+
+      if (user && user.passwordHash) {
+        // Generate a secure random token
+        const token = crypto.randomBytes(32).toString("hex");
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+        await db.insert(passwordResetTokens).values({ userId: user.id, token, expiresAt });
+
+        const resetUrl = `https://livelock.io/reset-password?token=${token}`;
+        sendPasswordResetEmail(email, resetUrl).catch(() => {});
+      }
+
+      // Always return success so attackers can't enumerate emails
+      return { success: true };
+    }),
+
+  resetPassword: publicProcedure
+    .input(z.object({
+      token: z.string().min(1),
+      newPassword: z.string().min(8).max(128),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const now = new Date();
+
+      const rows = await db
+        .select()
+        .from(passwordResetTokens)
+        .where(
+          and(
+            eq(passwordResetTokens.token, input.token),
+            isNull(passwordResetTokens.usedAt),
+            gt(passwordResetTokens.expiresAt, now),
+          )
+        )
+        .limit(1);
+
+      const resetToken = rows[0];
+      if (!resetToken) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This reset link is invalid or has expired. Please request a new one.",
+        });
+      }
+
+      // Hash the new password
+      const salt = createSalt();
+      const hash = hashPassword(input.newPassword, salt);
+      const passwordHash = `${salt}:${hash}`;
+
+      // Update the user's password and mark the token used
+      await db.update(users).set({ passwordHash }).where(eq(users.id, resetToken.userId));
+      await db.update(passwordResetTokens).set({ usedAt: now }).where(eq(passwordResetTokens.id, resetToken.id));
+
+      return { success: true };
     }),
 
   login: publicProcedure

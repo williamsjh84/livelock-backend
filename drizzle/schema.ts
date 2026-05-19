@@ -26,6 +26,10 @@ export const users = mysqlTable("users", {
   hasPasskey: boolean("hasPasskey").default(false).notNull(),
   /** Hashed password for email/password auth (format: salt:hash) */
   passwordHash: varchar("passwordHash", { length: 255 }),
+  /** E.164 phone number for SMS notifications, e.g. +12125551234 */
+  phone: varchar("phone", { length: 20 }),
+  /** Whether this user has opted in to SMS notifications */
+  smsNotifications: boolean("smsNotifications").default(false).notNull(),
 });
 
 export type User = typeof users.$inferSelect;
@@ -192,3 +196,33 @@ export const auditLog = mysqlTable("audit_log", {
 
 export type AuditLogEntry = typeof auditLog.$inferSelect;
 export type InsertAuditLogEntry = typeof auditLog.$inferInsert;
+
+/**
+ * Password reset tokens for the "Forgot password" flow.
+ * Tokens are single-use and expire after 1 hour.
+ */
+export const passwordResetTokens = mysqlTable("password_reset_tokens", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  token: varchar("token", { length: 64 }).notNull().unique(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  usedAt: timestamp("usedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+
+/**
+ * Web Push subscriptions for PWA push notifications.
+ * One user can have multiple subscriptions (different browsers/devices).
+ */
+export const pushSubscriptions = mysqlTable("push_subscriptions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  endpoint: text("endpoint").notNull(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;

@@ -2,11 +2,12 @@
  * LiveLock — Settings Page (/app/settings)
  * Manage passkeys, display name, and account info.
  */
-import { useState } from "react";
-import { Shield, Plus, Trash2, Smartphone, Monitor, Key, User, CheckCircle2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Shield, Plus, Trash2, Smartphone, Monitor, Key, User, CheckCircle2, Bell, BellOff, MessageSquare } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { startRegistration } from "@simplewebauthn/browser";
+import { isPushSupported, getNotificationPermission, registerPushSubscription, unregisterPushSubscription } from "@/lib/push";
 
 export default function Settings() {
   const { data: user, refetch: refetchUser } = trpc.auth.me.useQuery();
@@ -15,6 +16,28 @@ export default function Settings() {
   const regOptionsMutation = trpc.webauthn.registrationOptions.useMutation();
   const verifyRegMutation = trpc.webauthn.verifyRegistration.useMutation({ onSuccess: () => { refetchCreds(); refetchUser(); } });
   const updateProfileMutation = trpc.auth.updateProfile.useMutation({ onSuccess: () => refetchUser() });
+  const { data: vapidData } = trpc.notifications.getVapidPublicKey.useQuery();
+  const { data: pushStatus, refetch: refetchPushStatus } = trpc.notifications.getPushStatus.useQuery();
+  const subscribeMutation = trpc.notifications.subscribe.useMutation({ onSuccess: () => refetchPushStatus() });
+  const unsubscribeMutation = trpc.notifications.unsubscribe.useMutation({ onSuccess: () => refetchPushStatus() });
+  const updateSmsMutation = trpc.notifications.updateSmsSettings.useMutation();
+
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushPermission, setPushPermission] = useState<string>("default");
+  const [phone, setPhone] = useState(user?.phone ?? "");
+  const [smsEnabled, setSmsEnabled] = useState(user?.smsNotifications ?? false);
+  const [smsSaved, setSmsSaved] = useState(false);
+
+  useEffect(() => {
+    setPushPermission(getNotificationPermission());
+  }, []);
+
+  useEffect(() => {
+    if (user) {
+      setPhone(user.phone ?? "");
+      setSmsEnabled(user.smsNotifications ?? false);
+    }
+  }, [user]);
 
   const [addingKey, setAddingKey] = useState(false);
   const [deviceName, setDeviceName] = useState("");
@@ -201,6 +224,108 @@ export default function Settings() {
         <p className="text-[10px] text-white/20 mt-3 leading-relaxed">
           Passkeys use your device's biometric sensor (Face ID, Touch ID, Windows Hello) to sign in. The private key never leaves your device.
         </p>
+      </div>
+
+      {/* Push Notifications */}
+      <div className="p-5 rounded-2xl border border-white/[0.08] bg-white/[0.02] mt-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Bell size={14} className="text-[#00C9B1]" />
+          <p className="text-sm font-bold text-white" style={{ fontFamily: "Space Grotesk, sans-serif" }}>Push Notifications</p>
+        </div>
+
+        {!isPushSupported() ? (
+          <p className="text-xs text-white/30">Push notifications are not supported in this browser.</p>
+        ) : pushPermission === "denied" ? (
+          <div className="p-3 rounded-xl bg-amber-400/5 border border-amber-400/20">
+            <p className="text-xs text-amber-400/80 leading-relaxed">
+              Notifications are blocked in your browser settings. To enable, click the lock icon in your address bar and allow notifications for livelock.io.
+            </p>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-white/70">Verify requests</p>
+              <p className="text-[10px] text-white/30 mt-0.5">Get notified when a teammate wants to verify you</p>
+            </div>
+            <button
+              onClick={async () => {
+                setPushLoading(true);
+                try {
+                  if (pushStatus?.subscribed) {
+                    await unregisterPushSubscription();
+                    await unsubscribeMutation.mutateAsync({});
+                  } else {
+                    const key = vapidData?.publicKey;
+                    if (!key) return;
+                    await registerPushSubscription(key);
+                    setPushPermission(getNotificationPermission());
+                  }
+                } finally {
+                  setPushLoading(false);
+                }
+              }}
+              disabled={pushLoading || !vapidData?.publicKey}
+              className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${
+                pushStatus?.subscribed ? "bg-[#00C9B1]" : "bg-white/[0.10]"
+              } disabled:opacity-50`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${pushStatus?.subscribed ? "translate-x-5" : "translate-x-0"}`} />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* SMS Notifications */}
+      <div className="p-5 rounded-2xl border border-white/[0.08] bg-white/[0.02] mt-5">
+        <div className="flex items-center gap-2 mb-4">
+          <MessageSquare size={14} className="text-[#00C9B1]" />
+          <p className="text-sm font-bold text-white" style={{ fontFamily: "Space Grotesk, sans-serif" }}>SMS Notifications</p>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="text-[10px] text-white/30 mb-1 block">Phone number</label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={e => { setPhone(e.target.value); setSmsSaved(false); }}
+              placeholder="+1 212 555 1234"
+              maxLength={20}
+              className="w-full px-3 py-2 rounded-xl border border-white/[0.08] bg-white/[0.03] text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-[#00C9B1]/40 transition-all"
+              style={{ fontFamily: "Space Grotesk, sans-serif" }}
+            />
+            <p className="text-[10px] text-white/20 mt-1">Include country code, e.g. +12125551234</p>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-white/70">Text me when someone wants to verify</p>
+              <p className="text-[10px] text-white/30 mt-0.5">Standard messaging rates may apply</p>
+            </div>
+            <button
+              onClick={() => { setSmsEnabled(v => !v); setSmsSaved(false); }}
+              disabled={!phone.trim()}
+              className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${
+                smsEnabled && phone.trim() ? "bg-[#00C9B1]" : "bg-white/[0.10]"
+              } disabled:opacity-40`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${smsEnabled && phone.trim() ? "translate-x-5" : "translate-x-0"}`} />
+            </button>
+          </div>
+
+          <Button
+            onClick={async () => {
+              await updateSmsMutation.mutateAsync({ phone: phone.trim() || null, smsNotifications: smsEnabled });
+              setSmsSaved(true);
+              setTimeout(() => setSmsSaved(false), 3000);
+            }}
+            disabled={updateSmsMutation.isPending}
+            className="w-full bg-white/[0.06] hover:bg-white/[0.10] border border-white/[0.10] text-white/70 hover:text-white"
+            variant="outline"
+          >
+            {smsSaved ? <><CheckCircle2 size={14} className="mr-2 text-[#00C9B1]" />Saved</> : updateSmsMutation.isPending ? "Saving…" : "Save SMS settings"}
+          </Button>
+        </div>
       </div>
     </div>
   );

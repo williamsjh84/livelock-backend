@@ -18,6 +18,8 @@ import EarlyAccess from "./pages/EarlyAccess";
 import Admin from "./pages/Admin";
 import Register from "./pages/Register";
 import Login from "./pages/Login";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import JoinTeam from "./pages/JoinTeam";
 import AppLayout from "./components/AppLayout";
 import PwaInstallPrompt from "./components/PwaInstallPrompt";
@@ -40,6 +42,8 @@ function Router() {
       <Route path={"/admin"} component={Admin} />
       <Route path={"/register"} component={Register} />
       <Route path={"/login"} component={Login} />
+      <Route path={"/forgot-password"} component={ForgotPassword} />
+      <Route path={"/reset-password"} component={ResetPassword} />
       <Route path={"/join"} component={JoinTeam} />
       <Route path={"/app/dashboard"}>
         <AppLayout><Dashboard /></AppLayout>

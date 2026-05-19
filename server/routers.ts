@@ -8,6 +8,7 @@ import { sendEarlyAccessConfirmation } from "./email";
 import { webauthnRouter } from "./webauthnRouter";
 import { passwordRouter } from "./passwordRouter";
 import { sessionsRouter, teamsRouter, auditRouter, usersRouter } from "./sessionsRouter";
+import { notificationsRouter } from "./notificationsRouter";
 import { z } from "zod";
 
 const earlyAccessRouter = router({
@@ -103,6 +104,7 @@ export const appRouter = router({
   teams: teamsRouter,
   audit: auditRouter,
   users: usersRouter,
+  notifications: notificationsRouter,
 });
 
 export type AppRouter = typeof appRouter;

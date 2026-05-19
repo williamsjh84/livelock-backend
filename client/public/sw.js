@@ -79,18 +79,22 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// Push notifications (Phase 3 — placeholder)
+// Push notifications
 self.addEventListener('push', (event) => {
   if (!event.data) return;
   const data = event.data.json();
   event.waitUntil(
     self.registration.showNotification(data.title || 'LiveLock', {
       body: data.body || 'You have a new verification request.',
-      icon: '/manus-storage/icon-192x192_4868ddd0.png',
-      badge: '/manus-storage/icon-144x144_ef79dc1d.png',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
       tag: 'livelock-verification',
       requireInteraction: true,
       data: { url: data.url || '/app/verify' },
+      actions: [
+        { action: 'verify', title: 'Verify Now' },
+        { action: 'dismiss', title: 'Dismiss' },
+      ],
     })
   );
 });

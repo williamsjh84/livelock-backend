@@ -202,6 +202,194 @@ You're receiving this because you requested early access.
 `;
 }
 
+// ── Password Reset Template ───────────────────────────────────────────────────
+
+function buildPasswordResetHtml(resetUrl: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reset your LiveLock password</title>
+</head>
+<body style="margin:0;padding:0;background-color:#0A1628;font-family:'Inter',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0A1628;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
+        <tr>
+          <td align="center" style="padding-bottom:32px;">
+            <table cellpadding="0" cellspacing="0"><tr>
+              <td style="vertical-align:middle;padding-right:12px;">
+                <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#00C9B1,#0077B6);display:inline-flex;align-items:center;justify-content:center;">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2L3 7V12C3 16.55 6.84 20.74 12 22C17.16 20.74 21 16.55 21 12V7L12 2Z" fill="white"/></svg>
+                </div>
+              </td>
+              <td style="vertical-align:middle;">
+                <p style="margin:0;font-size:20px;font-weight:700;color:#FFFFFF;letter-spacing:-0.3px;">LiveLock</p>
+                <p style="margin:0;font-size:9px;color:#00C9B1;letter-spacing:2px;text-transform:uppercase;">Human Verification Layer</p>
+              </td>
+            </tr></table>
+          </td>
+        </tr>
+        <tr>
+          <td style="background-color:#0F1E35;border-radius:20px;border:1px solid rgba(255,255,255,0.07);padding:40px 36px;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+              <tr><td align="center">
+                <div style="width:64px;height:64px;border-radius:50%;background-color:rgba(0,119,182,0.15);border:2px solid rgba(0,119,182,0.4);display:inline-flex;align-items:center;justify-content:center;">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" stroke="#0077B6" stroke-width="2"/><path d="M7 11V7a5 5 0 0110 0v4" stroke="#0077B6" stroke-width="2" stroke-linecap="round"/></svg>
+                </div>
+              </td></tr>
+            </table>
+            <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#FFFFFF;text-align:center;letter-spacing:-0.5px;">Reset your password</h1>
+            <p style="margin:0 0 28px;font-size:14px;color:rgba(255,255,255,0.5);text-align:center;line-height:1.6;">
+              We received a request to reset your LiveLock password.<br/>Click the button below — the link expires in <strong style="color:rgba(255,255,255,0.7);">1 hour</strong>.
+            </p>
+            <div style="height:1px;background:rgba(255,255,255,0.06);margin-bottom:28px;"></div>
+            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+              <tr><td align="center">
+                <a href="${resetUrl}" style="display:inline-block;padding:14px 36px;background-color:#00C9B1;color:#0A1628;font-size:14px;font-weight:700;text-decoration:none;border-radius:12px;">Reset Password →</a>
+              </td></tr>
+            </table>
+            <p style="margin:0 0 16px;font-size:11px;color:rgba(255,255,255,0.25);text-align:center;">
+              Or copy this link: <span style="color:rgba(0,201,177,0.6);word-break:break-all;">${resetUrl}</span>
+            </p>
+            <div style="height:1px;background:rgba(255,255,255,0.06);margin-bottom:16px;"></div>
+            <p style="margin:0;font-size:11px;color:rgba(255,255,255,0.25);text-align:center;">If you didn't request this, you can safely ignore this email. Your password won't change.</p>
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding-top:28px;">
+            <p style="margin:0;font-size:11px;color:rgba(255,255,255,0.2);">LiveLock · Human Verification Layer · livelock.io</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+function buildPasswordResetText(resetUrl: string): string {
+  return `Reset your LiveLock password
+
+We received a request to reset your password. The link below expires in 1 hour.
+
+${resetUrl}
+
+If you didn't request this, ignore this email — your password won't change.
+
+—
+LiveLock · livelock.io
+`;
+}
+
+export async function sendPasswordResetEmail(toEmail: string, resetUrl: string): Promise<boolean> {
+  const client = getResendClient();
+  if (!client) return false;
+  try {
+    const { error } = await client.emails.send({
+      from: "LiveLock <team@livelock.io>",
+      to: [toEmail],
+      subject: "Reset your LiveLock password",
+      html: buildPasswordResetHtml(resetUrl),
+      text: buildPasswordResetText(resetUrl),
+    });
+    if (error) { console.warn("[Email] Password reset error:", error); return false; }
+    console.info(`[Email] Password reset sent to ${toEmail}`);
+    return true;
+  } catch (err) {
+    console.warn("[Email] Failed to send password reset:", err);
+    return false;
+  }
+}
+
+// ── Verification Notification Template ───────────────────────────────────────
+
+function buildVerificationNotificationHtml(initiatorName: string, actionContext: string | null): string {
+  const actionLine = actionContext
+    ? `<p style="margin:0 0 20px;font-size:13px;color:rgba(255,255,255,0.4);text-align:center;line-height:1.5;">Action: <strong style="color:rgba(255,255,255,0.65);">${actionContext}</strong></p>`
+    : "";
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>Verification request</title></head>
+<body style="margin:0;padding:0;background-color:#0A1628;font-family:'Inter',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0A1628;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
+        <tr>
+          <td align="center" style="padding-bottom:32px;">
+            <table cellpadding="0" cellspacing="0"><tr>
+              <td style="vertical-align:middle;padding-right:12px;">
+                <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#00C9B1,#0077B6);display:inline-flex;align-items:center;justify-content:center;">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2L3 7V12C3 16.55 6.84 20.74 12 22C17.16 20.74 21 16.55 21 12V7L12 2Z" fill="white"/></svg>
+                </div>
+              </td>
+              <td style="vertical-align:middle;">
+                <p style="margin:0;font-size:20px;font-weight:700;color:#FFFFFF;letter-spacing:-0.3px;">LiveLock</p>
+                <p style="margin:0;font-size:9px;color:#00C9B1;letter-spacing:2px;text-transform:uppercase;">Human Verification Layer</p>
+              </td>
+            </tr></table>
+          </td>
+        </tr>
+        <tr>
+          <td style="background-color:#0F1E35;border-radius:20px;border:1px solid rgba(255,255,255,0.07);padding:40px 36px;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+              <tr><td align="center">
+                <div style="width:64px;height:64px;border-radius:50%;background-color:rgba(0,201,177,0.1);border:2px solid rgba(0,201,177,0.3);display:inline-flex;align-items:center;justify-content:center;">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="#00C9B1" stroke-width="2" stroke-linejoin="round"/></svg>
+                </div>
+              </td></tr>
+            </table>
+            <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#FFFFFF;text-align:center;letter-spacing:-0.5px;">
+              <span style="color:#00C9B1;">${initiatorName}</span> wants to verify you
+            </h1>
+            <p style="margin:0 0 16px;font-size:14px;color:rgba(255,255,255,0.5);text-align:center;line-height:1.6;">
+              Open LiveLock and confirm their identity. The session expires in <strong style="color:rgba(255,255,255,0.7);">90 seconds</strong>.
+            </p>
+            ${actionLine}
+            <div style="height:1px;background:rgba(255,255,255,0.06);margin-bottom:28px;"></div>
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr><td align="center">
+                <a href="https://livelock.io/app/verify" style="display:inline-block;padding:14px 36px;background-color:#00C9B1;color:#0A1628;font-size:14px;font-weight:700;text-decoration:none;border-radius:12px;">Verify Now →</a>
+              </td></tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding-top:28px;">
+            <p style="margin:0;font-size:11px;color:rgba(255,255,255,0.2);">LiveLock · Human Verification Layer · livelock.io</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+export async function sendVerificationNotificationEmail(
+  toEmail: string,
+  initiatorName: string,
+  actionContext: string | null,
+): Promise<boolean> {
+  const client = getResendClient();
+  if (!client) return false;
+  try {
+    const { error } = await client.emails.send({
+      from: "LiveLock <team@livelock.io>",
+      to: [toEmail],
+      subject: `${initiatorName} wants to verify you on LiveLock`,
+      html: buildVerificationNotificationHtml(initiatorName, actionContext),
+      text: `${initiatorName} wants to verify you on LiveLock.\n\nOpen the app to respond — the session expires in 90 seconds.\n\nhttps://livelock.io/app/verify\n\n— LiveLock`,
+    });
+    if (error) { console.warn("[Email] Verification notification error:", error); return false; }
+    return true;
+  } catch (err) {
+    console.warn("[Email] Failed to send verification notification:", err);
+    return false;
+  }
+}
+
 // ── Team Invite Template ──────────────────────────────────────────────────────
 
 function buildTeamInviteHtml(inviterName: string, teamName: string, inviteUrl: string): string {
