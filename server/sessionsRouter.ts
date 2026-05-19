@@ -39,6 +39,7 @@ import {
   getTeamById,
   isTeamMember,
   getAuditLog,
+  getAuditLogForTeams,
   appendAuditLog,
 } from "./sessionDb";
 import { getDb } from "./db";
@@ -420,11 +421,12 @@ const auditRouter = router({
       offset: z.number().int().min(0).default(0),
     }))
     .query(async ({ ctx, input }) => {
-      const team = await getTeamByUserId(ctx.user.id);
-      if (!team) return { entries: [], total: 0 };
+      const myTeams = await getTeamsByUserId(ctx.user.id);
+      if (myTeams.length === 0) return { entries: [], total: 0 };
 
-      const entries = await getAuditLog(team.id, input.limit, input.offset);
-      return { entries, teamId: team.id };
+      const teamIds = myTeams.map(({ team }) => team.id);
+      const entries = await getAuditLogForTeams(teamIds, input.limit, input.offset);
+      return { entries, teamIds };
     }),
 });
 
@@ -434,25 +436,28 @@ const usersRouter = router({
   getById: protectedProcedure
     .input(z.object({ userId: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
-      // Only allow looking up users who are on the same team
-      const myTeam = await getTeamByUserId(ctx.user.id);
-      if (!myTeam) {
+      // Allow looking up any user who shares at least one team with the caller
+      const myTeams = await getTeamsByUserId(ctx.user.id);
+      if (myTeams.length === 0) {
         throw new TRPCError({ code: "FORBIDDEN", message: "You must be in a team to look up users" });
       }
-      const members = await getTeamMembers(myTeam.id);
-      const member = members.find(m => m.userId === input.userId);
-      if (!member) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "User not found in your team" });
+      // Search all teams for the target user
+      for (const { team } of myTeams) {
+        const members = await getTeamMembers(team.id);
+        const member = members.find(m => m.userId === input.userId);
+        if (member) {
+          return {
+            id: member.userId,
+            name: member.name,
+            displayName: member.displayName,
+            email: member.email,
+            hasPasskey: member.hasPasskey,
+            role: member.role,
+            joinedAt: member.joinedAt,
+          };
+        }
       }
-      return {
-        id: member.userId,
-        name: member.name,
-        displayName: member.displayName,
-        email: member.email,
-        hasPasskey: member.hasPasskey,
-        role: member.role,
-        joinedAt: member.joinedAt,
-      };
+      throw new TRPCError({ code: "NOT_FOUND", message: "User not found in any of your teams" });
     }),
 });
 

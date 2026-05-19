@@ -16,7 +16,11 @@ const ACTION_ICONS: Record<string, React.ReactNode> = {
   "member.invited": <UserPlus size={13} className="text-violet-400" />,
   "member.joined": <UserPlus size={13} className="text-[#00C9B1]" />,
   "member.removed": <UserMinus size={13} className="text-red-400" />,
+  "member.left": <UserMinus size={13} className="text-white/40" />,
+  "member.invite_cancelled": <XCircle size={13} className="text-amber-400" />,
   "team.created": <Users size={13} className="text-[#00C9B1]" />,
+  "team.renamed": <Users size={13} className="text-blue-400" />,
+  "team.deleted": <Users size={13} className="text-red-400" />,
 };
 
 const ACTION_LABELS: Record<string, string> = {
@@ -28,7 +32,11 @@ const ACTION_LABELS: Record<string, string> = {
   "member.invited": "Member Invited",
   "member.joined": "Member Joined",
   "member.removed": "Member Removed",
+  "member.left": "Member Left",
+  "member.invite_cancelled": "Invite Cancelled",
   "team.created": "Team Created",
+  "team.renamed": "Team Renamed",
+  "team.deleted": "Team Deleted",
 };
 
 const ACTION_COLORS: Record<string, string> = {
@@ -40,7 +48,11 @@ const ACTION_COLORS: Record<string, string> = {
   "member.invited": "text-violet-400 bg-violet-400/10 border-violet-400/20",
   "member.joined": "text-[#00C9B1] bg-[#00C9B1]/10 border-[#00C9B1]/20",
   "member.removed": "text-red-400 bg-red-400/10 border-red-400/20",
+  "member.left": "text-white/40 bg-white/[0.04] border-white/[0.08]",
+  "member.invite_cancelled": "text-amber-400 bg-amber-400/10 border-amber-400/20",
   "team.created": "text-[#00C9B1] bg-[#00C9B1]/10 border-[#00C9B1]/20",
+  "team.renamed": "text-blue-400 bg-blue-400/10 border-blue-400/20",
+  "team.deleted": "text-red-400 bg-red-400/10 border-red-400/20",
 };
 
 export default function AuditLog() {

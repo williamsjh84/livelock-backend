@@ -2,8 +2,8 @@ import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { notifyOwner } from "./_core/notification";
 import { systemRouter } from "./_core/systemRouter";
-import { adminProcedure, publicProcedure, router } from "./_core/trpc";
-import { getEarlyAccessSignups, insertEarlyAccessSignup } from "./db";
+import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { getEarlyAccessSignups, insertEarlyAccessSignup, updateUserDisplayName } from "./db";
 import { sendEarlyAccessConfirmation } from "./email";
 import { webauthnRouter } from "./webauthnRouter";
 import { passwordRouter } from "./passwordRouter";
@@ -89,6 +89,12 @@ export const appRouter = router({
         success: true,
       } as const;
     }),
+    updateProfile: protectedProcedure
+      .input(z.object({ displayName: z.string().min(1).max(100).trim() }))
+      .mutation(async ({ ctx, input }) => {
+        await updateUserDisplayName(ctx.user.id, input.displayName);
+        return { success: true, displayName: input.displayName };
+      }),
   }),
   earlyAccess: earlyAccessRouter,
   webauthn: webauthnRouter,

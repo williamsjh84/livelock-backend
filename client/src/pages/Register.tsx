@@ -5,7 +5,7 @@
 import { startRegistration } from "@simplewebauthn/browser";
 import { Shield, Fingerprint, Loader2, CheckCircle2, AlertCircle, ArrowRight, Lock, KeyRound, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import NavBar from "@/components/NavBar";
 

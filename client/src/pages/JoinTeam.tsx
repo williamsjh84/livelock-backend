@@ -1,24 +1,31 @@
 /**
  * LiveLock — Join Team Page (/join?token=...)
- * Handles invite link acceptance, including switching teams.
+ * Handles invite link acceptance.
  */
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { Users, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { Users, CheckCircle2, XCircle, Loader2, LogIn } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 
 export default function JoinTeam() {
   const [, navigate] = useLocation();
   const [token, setToken] = useState<string | null>(null);
-  const [status, setStatus] = useState<"loading" | "ready" | "success" | "error">("loading");
+  const [status, setStatus] = useState<"loading" | "ready" | "success" | "already-member" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState("");
 
-  const { data: user } = trpc.auth.me.useQuery();
+  const { data: user, isLoading: userLoading } = trpc.auth.me.useQuery();
 
   const acceptMutation = trpc.teams.acceptInvite.useMutation({
     onSuccess: () => setStatus("success"),
-    onError: (err) => { setStatus("error"); setErrorMsg(err.message); },
+    onError: (err) => {
+      if (err.message === "You are already a member of this team") {
+        setStatus("already-member");
+      } else {
+        setStatus("error");
+        setErrorMsg(err.message);
+      }
+    },
   });
 
   useEffect(() => {
@@ -36,14 +43,16 @@ export default function JoinTeam() {
   const handleAccept = async () => {
     if (!token) return;
     if (!user) {
-      window.location.href = `/login?return=/join?token=${token}`;
+      // Redirect to login, then come back here after signing in
+      window.location.href = `/login?return=${encodeURIComponent(`/join?token=${token}`)}`;
       return;
     }
     await acceptMutation.mutateAsync({ token });
   };
 
-  // ── Loading ──────────────────────────────────────────────────────────────────
-  if (status === "loading") {
+  const font = { fontFamily: "Space Grotesk, sans-serif" };
+
+  if (status === "loading" || userLoading) {
     return (
       <div className="min-h-screen bg-[#0A1628] flex items-center justify-center">
         <Loader2 size={24} className="text-[#00C9B1] animate-spin" />
@@ -51,7 +60,6 @@ export default function JoinTeam() {
     );
   }
 
-  // ── Success ──────────────────────────────────────────────────────────────────
   if (status === "success") {
     return (
       <div className="min-h-screen bg-[#0A1628] flex items-center justify-center p-6">
@@ -59,20 +67,33 @@ export default function JoinTeam() {
           <div className="w-16 h-16 rounded-2xl bg-[#00C9B1]/10 border border-[#00C9B1]/20 flex items-center justify-center mx-auto mb-4">
             <CheckCircle2 size={28} className="text-[#00C9B1]" />
           </div>
-          <h1 className="text-xl font-bold text-white mb-2" style={{ fontFamily: "Space Grotesk, sans-serif" }}>You're in!</h1>
-          <p className="text-sm text-white/50 mb-6">You've successfully joined the team. You can now verify and be verified by your teammates.</p>
-          <Button
-            onClick={() => navigate("/app/dashboard")}
-            className="bg-[#00C9B1] hover:bg-[#00C9B1]/80 text-[#0A1628] font-bold"
-          >
-            Go to Dashboard
+          <h1 className="text-xl font-bold text-white mb-2" style={font}>You're in!</h1>
+          <p className="text-sm text-white/50 mb-6">You've joined the team. You can now verify and be verified by your teammates.</p>
+          <Button onClick={() => navigate("/app/team")} className="bg-[#00C9B1] hover:bg-[#00C9B1]/80 text-[#0A1628] font-bold">
+            Go to My Teams
           </Button>
         </div>
       </div>
     );
   }
 
-  // ── Error ────────────────────────────────────────────────────────────────────
+  if (status === "already-member") {
+    return (
+      <div className="min-h-screen bg-[#0A1628] flex items-center justify-center p-6">
+        <div className="max-w-sm w-full text-center">
+          <div className="w-16 h-16 rounded-2xl bg-[#00C9B1]/10 border border-[#00C9B1]/20 flex items-center justify-center mx-auto mb-4">
+            <CheckCircle2 size={28} className="text-[#00C9B1]" />
+          </div>
+          <h1 className="text-xl font-bold text-white mb-2" style={font}>You're already on this team</h1>
+          <p className="text-sm text-white/50 mb-6">No action needed — you already have access.</p>
+          <Button onClick={() => navigate("/app/team")} className="bg-[#00C9B1] hover:bg-[#00C9B1]/80 text-[#0A1628] font-bold">
+            Go to My Teams
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (status === "error") {
     return (
       <div className="min-h-screen bg-[#0A1628] flex items-center justify-center p-6">
@@ -80,7 +101,7 @@ export default function JoinTeam() {
           <div className="w-16 h-16 rounded-2xl bg-red-400/10 border border-red-400/20 flex items-center justify-center mx-auto mb-4">
             <XCircle size={28} className="text-red-400" />
           </div>
-          <h1 className="text-xl font-bold text-white mb-2" style={{ fontFamily: "Space Grotesk, sans-serif" }}>Invite Error</h1>
+          <h1 className="text-xl font-bold text-white mb-2" style={font}>Invite Error</h1>
           <p className="text-sm text-white/50 mb-6">{errorMsg}</p>
           <Button variant="outline" onClick={() => navigate("/")} className="border-white/[0.12] text-white/50">
             Go Home
@@ -98,26 +119,39 @@ export default function JoinTeam() {
           <div className="w-16 h-16 rounded-2xl bg-[#00C9B1]/10 border border-[#00C9B1]/20 flex items-center justify-center mx-auto mb-4">
             <Users size={28} className="text-[#00C9B1]" />
           </div>
-          <h1 className="text-xl font-bold text-white mb-2" style={{ fontFamily: "Space Grotesk, sans-serif" }}>Team Invite</h1>
+          <h1 className="text-xl font-bold text-white mb-2" style={font}>Team Invite</h1>
           <p className="text-sm text-white/50">
             {user
-              ? "You've been invited to join a LiveLock team. Accept to start verifying identities with your colleagues."
-              : "You've been invited to join a LiveLock team. Sign in or register first, then accept the invite."}
+              ? `Signed in as ${user.email || user.displayName || "you"}. Click below to join the team.`
+              : "You've been invited to join a LiveLock team. Sign in or create an account to accept."}
           </p>
         </div>
 
-        <Button
-          onClick={() => handleAccept()}
-          disabled={acceptMutation.isPending}
-          className="w-full bg-[#00C9B1] hover:bg-[#00C9B1]/80 text-[#0A1628] font-bold py-3"
-        >
-          {acceptMutation.isPending ? (
-            <Loader2 size={15} className="mr-2 animate-spin" />
-          ) : (
-            <CheckCircle2 size={15} className="mr-2" />
+        <div className="space-y-3">
+          <Button
+            onClick={handleAccept}
+            disabled={acceptMutation.isPending}
+            className="w-full bg-[#00C9B1] hover:bg-[#00C9B1]/80 text-[#0A1628] font-bold py-3"
+          >
+            {acceptMutation.isPending
+              ? <Loader2 size={15} className="mr-2 animate-spin" />
+              : user
+                ? <CheckCircle2 size={15} className="mr-2" />
+                : <LogIn size={15} className="mr-2" />
+            }
+            {user ? "Accept Invite" : "Sign In & Accept"}
+          </Button>
+
+          {!user && (
+            <Button
+              variant="outline"
+              onClick={() => navigate(`/register?return=${encodeURIComponent(`/join?token=${token}`)}`)}
+              className="w-full border-white/[0.12] text-white/50"
+            >
+              Create an account instead
+            </Button>
           )}
-          {user ? "Accept Invite" : "Sign In & Accept"}
-        </Button>
+        </div>
       </div>
     </div>
   );

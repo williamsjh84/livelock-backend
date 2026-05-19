@@ -4,7 +4,7 @@
  * All functions return raw Drizzle rows.
  */
 import { createHash } from "crypto";
-import { and, desc, eq, gt, isNull, lt, or } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, lt, or } from "drizzle-orm";
 import { getDb } from "./db";
 import {
   auditLog,
@@ -320,6 +320,18 @@ export async function getAuditLog(teamId: number, limit = 50, offset = 0): Promi
     .select()
     .from(auditLog)
     .where(eq(auditLog.teamId, teamId))
+    .orderBy(desc(auditLog.createdAt))
+    .limit(limit)
+    .offset(offset);
+}
+
+export async function getAuditLogForTeams(teamIds: number[], limit = 50, offset = 0): Promise<AuditLogEntry[]> {
+  const db = await getDb();
+  if (!db || teamIds.length === 0) return [];
+  return db
+    .select()
+    .from(auditLog)
+    .where(inArray(auditLog.teamId, teamIds))
     .orderBy(desc(auditLog.createdAt))
     .limit(limit)
     .offset(offset);

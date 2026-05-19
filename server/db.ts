@@ -89,6 +89,12 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+export async function updateUserDisplayName(userId: number, displayName: string): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(users).set({ displayName }).where(eq(users.id, userId));
+}
+
 // ── Early Access Signups ────────────────────────────────────────────────────
 
 export async function insertEarlyAccessSignup(data: InsertEarlyAccessSignup) {

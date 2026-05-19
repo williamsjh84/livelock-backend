@@ -14,7 +14,7 @@ export default function Settings() {
   const deleteCredMutation = trpc.webauthn.deleteCredential.useMutation({ onSuccess: () => refetchCreds() });
   const regOptionsMutation = trpc.webauthn.registrationOptions.useMutation();
   const verifyRegMutation = trpc.webauthn.verifyRegistration.useMutation({ onSuccess: () => { refetchCreds(); refetchUser(); } });
-  // Display name update: handled inline (no dedicated procedure yet)
+  const updateProfileMutation = trpc.auth.updateProfile.useMutation({ onSuccess: () => refetchUser() });
 
   const [addingKey, setAddingKey] = useState(false);
   const [deviceName, setDeviceName] = useState("");
@@ -96,9 +96,14 @@ export default function Settings() {
                   className="bg-[#00C9B1] hover:bg-[#00C9B1]/80 text-[#0A1628] font-bold"
                   onClick={async () => {
                     if (!displayName.trim()) { setNameError("Name cannot be empty"); return; }
-                    // Display name update would go here via a dedicated procedure
-                    setEditingName(false);
+                    try {
+                      await updateProfileMutation.mutateAsync({ displayName: displayName.trim() });
+                      setEditingName(false);
+                    } catch (err: unknown) {
+                      setNameError(err instanceof Error ? err.message : "Failed to save name");
+                    }
                   }}
+                  disabled={updateProfileMutation.isPending}
                 >
                   Save
                 </Button>

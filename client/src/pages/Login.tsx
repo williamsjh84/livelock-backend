@@ -12,6 +12,13 @@ import NavBar from "@/components/NavBar";
 type Step = "form" | "passkey" | "success" | "error";
 type Method = "passkey" | "password";
 
+function getReturnUrl(): string {
+  const params = new URLSearchParams(window.location.search);
+  const ret = params.get("return");
+  if (ret && ret.startsWith("/")) return ret;
+  return "/app/dashboard";
+}
+
 export default function Login() {
   const [, setLocation] = useLocation();
   const [method, setMethod] = useState<Method>("passkey");
@@ -54,7 +61,7 @@ export default function Login() {
 
       await verifyAuth.mutateAsync({ userId, response: authResponse });
       setStep("success");
-      setTimeout(() => setLocation("/app/dashboard"), 1500);
+      setTimeout(() => { window.location.href = getReturnUrl(); }, 1500);
     } catch (err: any) {
       setErrorMsg(err?.message ?? "Sign in failed. Please try again.");
       setStep("error");
@@ -71,8 +78,7 @@ export default function Login() {
     try {
       await passwordLogin.mutateAsync({ email, password });
       setStep("success");
-      // Full page reload so the session cookie is picked up by auth.me
-      setTimeout(() => { window.location.href = "/app/dashboard"; }, 1000);
+      setTimeout(() => { window.location.href = getReturnUrl(); }, 1000);
     } catch (err: any) {
       setErrorMsg(err?.message ?? "Invalid email or password.");
       setStep("error");
