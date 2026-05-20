@@ -3,14 +3,14 @@
  * Supports two methods: passkey (WebAuthn biometric) and email + password.
  */
 import { startAuthentication } from "@simplewebauthn/browser";
-import { Shield, Fingerprint, Loader2, CheckCircle2, AlertCircle, ArrowRight, Lock, KeyRound, Eye, EyeOff } from "lucide-react";
-import { useState } from "react";
+import { Shield, Fingerprint, Loader2, CheckCircle2, AlertCircle, ArrowRight, Lock, KeyRound, Eye, EyeOff, Building2 } from "lucide-react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import NavBar from "@/components/NavBar";
 
 type Step = "form" | "passkey" | "success" | "error";
-type Method = "passkey" | "password";
+type Method = "passkey" | "password" | "sso";
 
 function getReturnUrl(): string {
   const params = new URLSearchParams(window.location.search);
@@ -29,9 +29,45 @@ export default function Login() {
   const [errorMsg, setErrorMsg] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
+  const [ssoOrg, setSsoOrg] = useState<string | null>(null);
+
+  // Handle SSO error redirect from callback
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ssoError = params.get("sso_error");
+    const ssoEmail = params.get("email");
+    if (ssoError) {
+      const messages: Record<string, string> = {
+        no_sso_config: "No SSO is configured for this domain. Try passkey or password instead.",
+        assertion_failed: "SSO sign-in failed — the identity provider returned an invalid response.",
+        no_email_in_assertion: "SSO configuration error: your identity provider did not return an email address.",
+        missing_email: "Please enter your work email before signing in with SSO.",
+      };
+      setErrorMsg(messages[ssoError] ?? "SSO sign-in failed. Please try again.");
+      setStep("error");
+      setMethod("sso");
+      if (ssoEmail) setEmail(ssoEmail);
+    }
+  }, []);
+
   const getAuthOptions = trpc.webauthn.authenticationOptions.useMutation();
   const verifyAuth = trpc.webauthn.verifyAuthentication.useMutation();
   const passwordLogin = trpc.password.login.useMutation();
+  const checkDomain = trpc.org.checkDomain.useQuery(
+    { email },
+    { enabled: email.includes("@") && email.includes("."), refetchOnWindowFocus: false }
+  );
+
+  // Auto-detect SSO domain as user types email
+  useEffect(() => {
+    if (checkDomain.data?.hasSso) {
+      setSsoOrg(checkDomain.data.orgName);
+      if (method !== "sso") setMethod("sso");
+    } else if (method === "sso" && !checkDomain.data?.hasSso) {
+      setSsoOrg(null);
+      setMethod("passkey");
+    }
+  }, [checkDomain.data]);
 
   function switchMethod(m: Method) {
     setMethod(m);
@@ -118,9 +154,7 @@ export default function Login() {
                   type="button"
                   onClick={() => switchMethod("passkey")}
                   className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-semibold transition-all ${
-                    method === "passkey"
-                      ? "bg-[#00C9B1] text-[#0A1628]"
-                      : "text-white/50 hover:text-white/80"
+                    method === "passkey" ? "bg-[#00C9B1] text-[#0A1628]" : "text-white/50 hover:text-white/80"
                   }`}
                   style={font}
                 >
@@ -131,14 +165,23 @@ export default function Login() {
                   type="button"
                   onClick={() => switchMethod("password")}
                   className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-semibold transition-all ${
-                    method === "password"
-                      ? "bg-[#00C9B1] text-[#0A1628]"
-                      : "text-white/50 hover:text-white/80"
+                    method === "password" ? "bg-[#00C9B1] text-[#0A1628]" : "text-white/50 hover:text-white/80"
                   }`}
                   style={font}
                 >
                   <KeyRound size={14} />
                   Password
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchMethod("sso")}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-semibold transition-all ${
+                    method === "sso" ? "bg-[#00C9B1] text-[#0A1628]" : "text-white/50 hover:text-white/80"
+                  }`}
+                  style={font}
+                >
+                  <Building2 size={14} />
+                  SSO
                 </button>
               </div>
             )}
@@ -259,6 +302,53 @@ export default function Login() {
                 >
                   {isLoading ? <Loader2 size={16} className="animate-spin" /> : <><KeyRound size={16} />Sign in<ArrowRight size={14} /></>}
                 </button>
+              </form>
+            )}
+
+            {/* ── SSO FLOW ── */}
+            {method === "sso" && (step === "form" || step === "error") && (
+              <form onSubmit={e => { e.preventDefault(); window.location.href = `/auth/sso/initiate?email=${encodeURIComponent(email)}`; }} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-white/60 mb-1.5" style={font}>Work email</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="joe@company.com"
+                    required
+                    autoFocus
+                    className={inputClass}
+                    style={font}
+                  />
+                  {ssoOrg && (
+                    <div className="mt-2 flex items-center gap-2 p-2.5 rounded-xl bg-[#00C9B1]/5 border border-[#00C9B1]/20">
+                      <Building2 size={13} className="text-[#00C9B1] flex-shrink-0" />
+                      <p className="text-[11px] text-[#00C9B1]/80">SSO detected for <span className="font-semibold text-[#00C9B1]">{ssoOrg}</span></p>
+                    </div>
+                  )}
+                </div>
+
+                {step === "error" && errorMsg && (
+                  <div className="flex items-start gap-2.5 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+                    <AlertCircle size={15} className="text-red-400 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-red-300 leading-relaxed">{errorMsg}</p>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={!email}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#00C9B1] text-[#0A1628] font-semibold text-sm transition-all hover:bg-[#00b8a0] disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={font}
+                >
+                  <Building2 size={16} />Continue with SSO<ArrowRight size={14} />
+                </button>
+
+                <div className="p-3 rounded-xl bg-[#00C9B1]/5 border border-[#00C9B1]/10">
+                  <p className="text-[11px] text-white/40 leading-relaxed">
+                    <span className="text-[#00C9B1] font-medium">How SSO works:</span> Enter your work email and you'll be redirected to your company's identity provider (Okta, Azure AD, etc.).
+                  </p>
+                </div>
               </form>
             )}
 

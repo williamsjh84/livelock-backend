@@ -9,6 +9,7 @@ import { webauthnRouter } from "./webauthnRouter";
 import { passwordRouter } from "./passwordRouter";
 import { sessionsRouter, teamsRouter, auditRouter, usersRouter } from "./sessionsRouter";
 import { notificationsRouter } from "./notificationsRouter";
+import { orgRouter } from "./orgRouter";
 import { z } from "zod";
 
 const earlyAccessRouter = router({
@@ -110,6 +111,7 @@ export const appRouter = router({
   audit: auditRouter,
   users: usersRouter,
   notifications: notificationsRouter,
+  org: orgRouter,
 });
 
 export type AppRouter = typeof appRouter;

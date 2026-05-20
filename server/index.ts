@@ -144,6 +144,14 @@ async function startServer() {
     })
   );
 
+  // ── SSO / SAML routes ────────────────────────────────────────────────────
+  // These run OUTSIDE tRPC because SAML uses HTTP redirects and form posts
+  const { ssoInitiate, ssoCallback, ssoMetadata } = await import("./sso");
+  app.get("/auth/sso/metadata", ssoMetadata);
+  app.get("/auth/sso/initiate", ssoInitiate);
+  // ACS must accept URL-encoded form POST from IdP
+  app.post("/auth/sso/callback", express.urlencoded({ extended: true }), ssoCallback);
+
   // ── Audit CSV export ─────────────────────────────────────────────────────
   app.get("/api/audit/export/:teamId", async (req, res) => {
     try {

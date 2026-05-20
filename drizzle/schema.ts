@@ -32,6 +32,8 @@ export const users = mysqlTable("users", {
   phone: varchar("phone", { length: 20 }),
   /** Whether this user has opted in to SMS notifications */
   smsNotifications: boolean("smsNotifications").default(false).notNull(),
+  /** Organization ID for SSO users */
+  orgId: int("orgId"),
 });
 
 export type User = typeof users.$inferSelect;
@@ -230,3 +232,36 @@ export const pushSubscriptions = mysqlTable("push_subscriptions", {
 });
 
 export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+
+/**
+ * Organizations for SSO/SAML enterprise login.
+ * Maps a company domain to a SAML configuration.
+ */
+export const organizations = mysqlTable("organizations", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 200 }).notNull(),
+  slug: varchar("slug", { length: 100 }).notNull().unique(),
+  domain: varchar("domain", { length: 255 }).notNull().unique(),
+  ownerId: int("ownerId").notNull(),
+  ssoEnabled: boolean("ssoEnabled").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Organization = typeof organizations.$inferSelect;
+
+/**
+ * SAML SP configuration per organization.
+ * Stores IdP metadata needed to verify SAML assertions.
+ */
+export const samlConfigs = mysqlTable("saml_configs", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull().unique(),
+  entryPoint: varchar("entryPoint", { length: 500 }).notNull(),
+  issuer: varchar("issuer", { length: 500 }).notNull(),
+  cert: text("cert").notNull(),
+  nameIdFormat: varchar("nameIdFormat", { length: 200 }).default("urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress").notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type SamlConfig = typeof samlConfigs.$inferSelect;

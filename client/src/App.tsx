@@ -28,6 +28,7 @@ import Verify from "./pages/app/Verify";
 import Team from "./pages/app/Team";
 import AuditLog from "./pages/app/AuditLog";
 import Settings from "./pages/app/Settings";
+import SsoSettings from "./pages/app/SsoSettings";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
@@ -59,6 +60,9 @@ function Router() {
       </Route>
       <Route path={"/app/settings"}>
         <AppLayout><Settings /></AppLayout>
+      </Route>
+      <Route path={"/app/sso"}>
+        <AppLayout><SsoSettings /></AppLayout>
       </Route>
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
