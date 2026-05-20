@@ -49,6 +49,8 @@ import { getDb } from "./db";
 import { pushSubscriptions, users } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { sendTeamInviteEmail } from "./email";
+import { generateAuthenticationOptions } from "@simplewebauthn/server";
+import { getCredentialsByUserId, storeChallenge } from "./webauthnDb";
 
 // ── Sessions Router ───────────────────────────────────────────────────────────
 
@@ -206,6 +208,40 @@ const sessionsRouter = router({
         wordA: isInitiator ? session.wordA : undefined,
         wordB: undefined, // never expose decoy to client
       };
+    }),
+
+  /**
+   * Generate a WebAuthn challenge for biometric-gated session confirmation.
+   * Called just before the user taps "Accept" — the assertion proves physical presence.
+   * Users without passkeys get requiresBiometric: false and can confirm without biometric.
+   */
+  getBiometricChallenge: protectedProcedure
+    .input(z.object({ sessionId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const session = await getSessionById(input.sessionId);
+      if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
+      if (session.initiatorId !== ctx.user.id && session.responderId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Not a participant" });
+      }
+
+      const credentials = await getCredentialsByUserId(ctx.user.id);
+      if (credentials.length === 0) {
+        // Password-only user — no biometric available, allow confirmation without
+        return { requiresBiometric: false, options: null };
+      }
+
+      const rpId = process.env.RAILWAY_ENVIRONMENT ? "livelock.io" : "localhost";
+      const options = await generateAuthenticationOptions({
+        rpID: rpId,
+        allowCredentials: credentials.map(c => ({
+          id: c.credentialId,
+          type: "public-key" as const,
+        })),
+        userVerification: "required",
+      });
+
+      await storeChallenge(ctx.user.id, options.challenge, "authentication");
+      return { requiresBiometric: true, options };
     }),
 
   /**

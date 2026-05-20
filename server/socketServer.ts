@@ -18,6 +18,55 @@ import { Server as SocketIOServer, Socket } from "socket.io";
 import { jwtVerify } from "jose";
 import { ENV } from "./_core/env";
 import { getSessionById, updateSessionStatus, appendAuditLog } from "./sessionDb";
+import { verifyAuthenticationResponse } from "@simplewebauthn/server";
+import { consumeChallenge, getCredentialsByUserId, updateCredentialCounter } from "./webauthnDb";
+
+type AuthenticationResponseJSON = Parameters<typeof verifyAuthenticationResponse>[0]["response"];
+
+/**
+ * Verify a WebAuthn assertion for session confirmation.
+ * Returns true if verified, false if failed or no credentials.
+ * Returns null if the user has no passkeys (biometric not required).
+ */
+async function verifySessionBiometric(userId: number, assertionResponse: unknown): Promise<boolean | null> {
+  try {
+    const credentials = await getCredentialsByUserId(userId);
+    if (credentials.length === 0) return null; // no passkeys — skip biometric
+
+    const challenge = await consumeChallenge(userId, "authentication");
+    if (!challenge) return false;
+
+    const assertion = assertionResponse as AuthenticationResponseJSON;
+    const credential = credentials.find(c => c.credentialId === assertion.id);
+    if (!credential) return false;
+
+    const rpId = process.env.RAILWAY_ENVIRONMENT ? "livelock.io" : "localhost";
+    const expectedOrigin = process.env.RAILWAY_ENVIRONMENT
+      ? ["https://livelock.io", "https://www.livelock.io"]
+      : ["http://localhost:3000", "http://localhost:5173"];
+
+    const result = await verifyAuthenticationResponse({
+      response: assertion,
+      expectedChallenge: challenge,
+      expectedOrigin,
+      expectedRPID: rpId,
+      credential: {
+        id: credential.credentialId,
+        publicKey: Buffer.from(credential.publicKey, "base64url"),
+        counter: credential.counter,
+        transports: undefined,
+      },
+    });
+
+    if (result.verified) {
+      await updateCredentialCounter(credential.credentialId, result.authenticationInfo.newCounter);
+    }
+    return result.verified;
+  } catch (err) {
+    console.error("[Biometric] Verification error:", err);
+    return false;
+  }
+}
 
 // Session timeout in milliseconds (90 seconds)
 const SESSION_TIMEOUT_MS = 90_000;
@@ -150,19 +199,39 @@ export function attachSocketServer(httpServer: HttpServer): SocketIOServer {
       });
     });
 
-    // Round 1, Step 2: Responder confirms they heard wordA correctly
-    socket.on("session:responder-confirmed", async ({ sessionId }: { sessionId: string }) => {
+    // Round 1, Step 2: Responder confirms they heard wordA correctly — BIOMETRIC REQUIRED
+    socket.on("session:responder-confirmed", async ({ sessionId, assertionResponse }: { sessionId: string; assertionResponse?: unknown }) => {
       const session = await getSessionById(sessionId);
       if (!session || session.responderId !== userId) return;
       if (session.status !== "active") return;
 
-      await updateSessionStatus(sessionId, "active", { responderConfirmed: true });
+      // Verify biometric — null means no passkeys (allowed), false means failed
+      const biometricResult = assertionResponse
+        ? await verifySessionBiometric(userId, assertionResponse)
+        : null;
 
-      // Round 1 complete — now start Round 2: responder speaks wordB
-      // Send wordB to the responder (to say aloud) and notify initiator to listen
+      const hasPasskeys = (await getCredentialsByUserId(userId)).length > 0;
+
+      if (hasPasskeys && biometricResult !== true) {
+        const reason = biometricResult === false ? "Biometric verification failed" : "Biometric required";
+        socket.emit("session:biometric-required", { sessionId, reason });
+        return;
+      }
+
+      const biometricVerified = biometricResult === true;
+
+      await updateSessionStatus(sessionId, "active", { responderConfirmed: true });
+      await appendAuditLog({
+        sessionId,
+        teamId: session.teamId ?? undefined,
+        actorId: userId,
+        action: "session.responder-confirmed",
+        metadata: JSON.stringify({ biometricVerified }),
+      });
+
       io.to(sessionId).emit("session:round2-start", {
         sessionId,
-        wordB: session.wordB,  // responder's phone shows this to say aloud
+        wordB: session.wordB,
       });
     });
 
@@ -179,11 +248,26 @@ export function attachSocketServer(httpServer: HttpServer): SocketIOServer {
       });
     });
 
-    // Round 2, Step 2: Initiator confirms they heard wordB correctly → VERIFIED
-    socket.on("session:initiator-confirmed-round2", async ({ sessionId }: { sessionId: string }) => {
+    // Round 2, Step 2: Initiator confirms they heard wordB correctly → VERIFIED — BIOMETRIC REQUIRED
+    socket.on("session:initiator-confirmed-round2", async ({ sessionId, assertionResponse }: { sessionId: string; assertionResponse?: unknown }) => {
       const session = await getSessionById(sessionId);
       if (!session || session.initiatorId !== userId) return;
       if (session.status !== "active") return;
+
+      // Verify biometric
+      const biometricResult = assertionResponse
+        ? await verifySessionBiometric(userId, assertionResponse)
+        : null;
+
+      const hasPasskeys = (await getCredentialsByUserId(userId)).length > 0;
+
+      if (hasPasskeys && biometricResult !== true) {
+        const reason = biometricResult === false ? "Biometric verification failed" : "Biometric required";
+        socket.emit("session:biometric-required", { sessionId, reason });
+        return;
+      }
+
+      const biometricVerified = biometricResult === true;
 
       await updateSessionStatus(sessionId, "verified", { completedAt: new Date() });
       clearSessionTimer(sessionId);
@@ -197,6 +281,8 @@ export function attachSocketServer(httpServer: HttpServer): SocketIOServer {
           initiatorId: session.initiatorId,
           responderId: session.responderId,
           actionContext: session.actionContext,
+          biometricVerified,
+          fullyBiometricChain: biometricVerified, // both rounds verified biometrically
         }),
       });
 
@@ -204,6 +290,7 @@ export function attachSocketServer(httpServer: HttpServer): SocketIOServer {
         sessionId,
         verifiedAt: new Date().toISOString(),
         actionContext: session.actionContext,
+        biometricVerified,
       });
     });
 
