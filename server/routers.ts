@@ -10,6 +10,7 @@ import { passwordRouter } from "./passwordRouter";
 import { sessionsRouter, teamsRouter, auditRouter, usersRouter } from "./sessionsRouter";
 import { notificationsRouter } from "./notificationsRouter";
 import { orgRouter } from "./orgRouter";
+import { apiKeyRouter } from "./apiKeyRouter";
 import { z } from "zod";
 
 const earlyAccessRouter = router({
@@ -112,6 +113,7 @@ export const appRouter = router({
   users: usersRouter,
   notifications: notificationsRouter,
   org: orgRouter,
+  apiKeys: apiKeyRouter,
 });
 
 export type AppRouter = typeof appRouter;

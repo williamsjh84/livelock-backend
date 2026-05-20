@@ -265,3 +265,28 @@ export const samlConfigs = mysqlTable("saml_configs", {
 });
 
 export type SamlConfig = typeof samlConfigs.$inferSelect;
+
+/**
+ * API keys for programmatic access to LiveLock.
+ * Full key is shown once at creation — only the SHA-256 hash is stored.
+ */
+export const apiKeys = mysqlTable("api_keys", {
+  id: int("id").autoincrement().primaryKey(),
+  teamId: int("teamId").notNull(),
+  name: varchar("name", { length: 100 }).notNull(),
+  /** First 14 chars of key for display — e.g. "sk_live_a1b2c3" */
+  keyPrefix: varchar("keyPrefix", { length: 20 }).notNull(),
+  /** SHA-256 hash of the full key */
+  keyHash: varchar("keyHash", { length: 64 }).notNull().unique(),
+  /** Customer's endpoint to receive webhook events */
+  webhookUrl: varchar("webhookUrl", { length: 500 }),
+  /** HMAC secret for signing webhook payloads */
+  webhookSecret: varchar("webhookSecret", { length: 64 }),
+  /** Comma-separated scopes: sessions:write,sessions:read,members:read */
+  scopes: varchar("scopes", { length: 200 }).default("sessions:write,sessions:read,members:read").notNull(),
+  lastUsedAt: timestamp("lastUsedAt"),
+  revokedAt: timestamp("revokedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ApiKey = typeof apiKeys.$inferSelect;

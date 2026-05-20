@@ -18,6 +18,7 @@ import { Server as SocketIOServer, Socket } from "socket.io";
 import { jwtVerify } from "jose";
 import { ENV } from "./_core/env";
 import { getSessionById, updateSessionStatus, appendAuditLog, getTeamById } from "./sessionDb";
+import { fireTeamWebhooks } from "./webhook";
 import { verifyAuthenticationResponse } from "@simplewebauthn/server";
 import { consumeChallenge, getCredentialsByUserId, updateCredentialCounter } from "./webauthnDb";
 
@@ -320,12 +321,22 @@ export function attachSocketServer(httpServer: HttpServer): SocketIOServer {
         }),
       });
 
+      const verifiedAt = new Date().toISOString();
       io.to(sessionId).emit("session:verified", {
         sessionId,
-        verifiedAt: new Date().toISOString(),
+        verifiedAt,
         actionContext: session.actionContext,
         biometricVerified,
       });
+
+      // Fire webhooks to any registered API key endpoints
+      fireTeamWebhooks(session.teamId, "session.verified", sessionId, {
+        initiatorId: session.initiatorId,
+        responderId: session.responderId,
+        actionContext: session.actionContext,
+        biometricVerified,
+        verifiedAt,
+      }).catch(() => {});
     });
 
     // ── Shared rejection handler (either party, either round) ────────────────
@@ -470,6 +481,14 @@ export function attachSocketServer(httpServer: HttpServer): SocketIOServer {
         reason,
         rejectedBy: session.initiatorId === userId ? "initiator" : "responder",
       });
+
+      fireTeamWebhooks(session.teamId, "session.rejected", sessionId, {
+        reason: safeReason,
+        rejectedBy: session.initiatorId === userId ? "initiator" : "responder",
+        initiatorId: session.initiatorId,
+        responderId: session.responderId,
+        actionContext: session.actionContext,
+      }).catch(() => {});
     });
 
     // ── Either party can cancel at any point ────────────────────────────────

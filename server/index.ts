@@ -144,6 +144,10 @@ async function startServer() {
     })
   );
 
+  // ── Public REST API v1 ───────────────────────────────────────────────────
+  const { createRestApiRouter } = await import("./restApi");
+  app.use("/api/v1", createRestApiRouter());
+
   // ── SSO / SAML routes ────────────────────────────────────────────────────
   // These run OUTSIDE tRPC because SAML uses HTTP redirects and form posts
   const { ssoInitiate, ssoCallback, ssoMetadata } = await import("./sso");

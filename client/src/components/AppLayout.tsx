@@ -3,7 +3,7 @@
  * Sidebar layout for all /app/* routes.
  * Redirects to /login if the user is not authenticated.
  */
-import { Shield, LayoutDashboard, ShieldCheck, Users, ClipboardList, Settings, LogOut, Menu, X, ChevronRight, Building2 } from "lucide-react";
+import { Shield, LayoutDashboard, ShieldCheck, Users, ClipboardList, Settings, LogOut, Menu, X, ChevronRight, Building2, Code2 } from "lucide-react";
 import { Link, useLocation, Redirect } from "wouter";
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { href: "/app/team", label: "Team", icon: Users },
   { href: "/app/audit", label: "Audit Log", icon: ClipboardList },
   { href: "/app/settings", label: "Settings", icon: Settings },
+  { href: "/app/api", label: "API & Webhooks", icon: Code2 },
   { href: "/app/sso", label: "SSO / Enterprise", icon: Building2 },
 ];
 
