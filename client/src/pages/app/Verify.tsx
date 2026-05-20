@@ -18,11 +18,14 @@ import { useState, useEffect, useRef } from "react";
 import {
   ShieldCheck, Shield, UserCheck, X, CheckCircle2, XCircle,
   Clock, AlertTriangle, RefreshCw, Fingerprint, Mic, Volume2,
+  Video, VideoOff, MicOff,
 } from "lucide-react";
 import { io, Socket } from "socket.io-client";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
+import { useWebRTC } from "@/hooks/useWebRTC";
+import { VideoTile } from "@/components/VideoTile";
 
 // ── Phase types ───────────────────────────────────────────────────────────────
 
@@ -116,6 +119,25 @@ export default function Verify() {
   const [biometricError, setBiometricError] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const font = { fontFamily: "Space Grotesk, sans-serif" };
+
+  const sessionActive = phase.name === "r1_speaker" || phase.name === "r1_listener" ||
+    phase.name === "r2_speaker" || phase.name === "r2_listener" || phase.name === "pending";
+
+  const isInitiator = phase.name === "r1_speaker" || phase.name === "r2_listener" || phase.name === "pending";
+
+  const sessionId = ("sessionId" in phase ? phase.sessionId : null) as string | null;
+
+  const webrtc = useWebRTC({
+    sessionId,
+    socketRef,
+    isInitiator,
+    enabled: sessionActive,
+  });
+
+  // Stop media when session ends
+  useEffect(() => {
+    if (!sessionActive) webrtc.stopMedia();
+  }, [sessionActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const teamMembers = [...new Map(
     (teamData ?? []).flatMap(t => t.members).map(m => [m.userId, m])
@@ -302,11 +324,100 @@ export default function Verify() {
   const handleReset = () => {
     socketRef.current?.disconnect();
     socketRef.current = null;
+    webrtc.stopMedia();
     setPhase({ name: "idle" });
     setBiometricError(null);
     setActionContext("");
     setSelectedMemberId(null);
   };
+
+  // ── Video Panel ───────────────────────────────────────────────────────────
+  function VideoPanel() {
+    // Mic status pill — always visible when audio is running
+    const MicPill = (
+      <button
+        onClick={webrtc.toggleMic}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
+          webrtc.isMicOn
+            ? "bg-white/[0.06] border-white/[0.10] text-white/50 hover:text-white"
+            : "bg-red-500/10 border-red-500/20 text-red-400"
+        }`}
+      >
+        {webrtc.isMicOn ? <Mic size={12} /> : <MicOff size={12} />}
+        {webrtc.isMicOn ? "Mic on" : "Muted"}
+      </button>
+    );
+
+    // Not yet started camera
+    if (!webrtc.isCameraOn) {
+      return (
+        <div className="flex items-center gap-2 justify-center mb-3">
+          {MicPill}
+          <button
+            onClick={webrtc.startCamera}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-[#00C9B1]/10 border border-[#00C9B1]/20 text-[#00C9B1] hover:bg-[#00C9B1]/20 transition-colors"
+          >
+            <Video size={12} /> Add camera
+          </button>
+        </div>
+      );
+    }
+
+    // Full video UI
+    return (
+      <div className="mb-4">
+        <div className="relative w-full aspect-video rounded-2xl overflow-hidden bg-[#0d1f35] border border-white/[0.08]">
+          {/* Remote: full size */}
+          <VideoTile
+            stream={webrtc.remoteStream}
+            isCameraOn={webrtc.isRemoteCameraOn}
+            isMicOn={webrtc.isRemoteMicOn}
+            name={partnerName}
+            type="remote"
+            className="w-full h-full"
+          />
+          {/* Local: picture-in-picture */}
+          <div className="absolute bottom-2 right-2 w-24 aspect-video rounded-xl overflow-hidden border border-white/20 shadow-lg">
+            <VideoTile
+              stream={webrtc.localStream}
+              isCameraOn={webrtc.isCameraOn}
+              isMicOn={webrtc.isMicOn}
+              name="You"
+              type="local"
+              isSmall
+              className="w-full h-full"
+            />
+          </div>
+          {/* Controls overlay */}
+          <div className="absolute top-2 left-2 flex gap-1.5">
+            <button
+              onClick={webrtc.toggleCamera}
+              className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
+                webrtc.isCameraOn ? "bg-black/40 hover:bg-black/60 text-white" : "bg-red-500/80 text-white"
+              }`}
+              title={webrtc.isCameraOn ? "Turn off camera" : "Turn on camera"}
+            >
+              {webrtc.isCameraOn ? <Video size={13} /> : <VideoOff size={13} />}
+            </button>
+            <button
+              onClick={webrtc.toggleMic}
+              className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
+                webrtc.isMicOn ? "bg-black/40 hover:bg-black/60 text-white" : "bg-red-500/80 text-white"
+              }`}
+              title={webrtc.isMicOn ? "Mute" : "Unmute"}
+            >
+              {webrtc.isMicOn ? <Mic size={13} /> : <MicOff size={13} />}
+            </button>
+          </div>
+        </div>
+        {webrtc.isConnected && (
+          <p className="text-[10px] text-[#00C9B1]/60 text-center mt-1 flex items-center justify-center gap-1">
+            <Shield size={9} /> Peer-to-peer · end-to-end encrypted
+          </p>
+        )}
+      </div>
+    );
+  }
 
   // ── Terminal states ───────────────────────────────────────────────────────
 
@@ -388,6 +499,7 @@ export default function Verify() {
           <RoundPips round={1} />
           <CountdownTimer expiresAt={phase.expiresAt} />
         </div>
+        <VideoPanel />
         <div className="p-2 rounded-xl bg-[#00C9B1]/10 border border-[#00C9B1]/20 flex items-center gap-2 mb-4 px-4">
           <Mic size={13} className="text-[#00C9B1]" />
           <p className="text-xs text-[#00C9B1]/80">Your turn to speak</p>
@@ -416,6 +528,7 @@ export default function Verify() {
           <RoundPips round={1} />
           <CountdownTimer expiresAt={phase.expiresAt} />
         </div>
+        <VideoPanel />
         <div className="p-2 rounded-xl bg-white/[0.06] border border-white/[0.08] flex items-center gap-2 mb-4 px-4">
           <Volume2 size={13} className="text-white/40" />
           <p className="text-xs text-white/40">Listen for <span className="text-white/70">{partnerName}</span> to say:</p>
@@ -465,6 +578,7 @@ export default function Verify() {
           <RoundPips round={2} />
           <CountdownTimer expiresAt={phase.expiresAt} />
         </div>
+        <VideoPanel />
         <div className="p-2 rounded-xl bg-[#00C9B1]/10 border border-[#00C9B1]/20 flex items-center gap-2 mb-4 px-4">
           <Mic size={13} className="text-[#00C9B1]" />
           <p className="text-xs text-[#00C9B1]/80">Your turn to speak</p>
@@ -493,6 +607,7 @@ export default function Verify() {
           <RoundPips round={2} />
           <CountdownTimer expiresAt={phase.expiresAt} />
         </div>
+        <VideoPanel />
         <div className="p-2 rounded-xl bg-white/[0.06] border border-white/[0.08] flex items-center gap-2 mb-4 px-4">
           <Volume2 size={13} className="text-white/40" />
           <p className="text-xs text-white/40">Listen for <span className="text-white/70">{partnerName}</span> to say:</p>
@@ -607,10 +722,10 @@ export default function Verify() {
           {/* How it works */}
           <div className="p-4 rounded-2xl border border-white/[0.04] bg-white/[0.01] space-y-2">
             {[
+              { icon: <Video size={11} />, text: "Optional live video — see each other face to face" },
               { icon: <Mic size={11} />, text: "You receive a secret word — say it aloud" },
-              { icon: <Volume2 size={11} />, text: "They confirm they heard it with Face ID" },
-              { icon: <Mic size={11} />, text: "Roles flip — they say a word, you listen" },
-              { icon: <Fingerprint size={11} />, text: "You confirm with Face ID — both verified" },
+              { icon: <Volume2 size={11} />, text: "They confirm they heard it with biometric" },
+              { icon: <Fingerprint size={11} />, text: "Roles flip — final confirmation — both verified" },
             ].map((step, i) => (
               <div key={i} className="flex items-center gap-3">
                 <div className="w-5 h-5 rounded-full bg-[#00C9B1]/10 border border-[#00C9B1]/20 flex items-center justify-center text-[#00C9B1] flex-shrink-0">{step.icon}</div>
