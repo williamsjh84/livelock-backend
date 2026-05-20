@@ -32,6 +32,8 @@ import {
   addTeamMember,
   removeTeamMember,
   updateTeamName,
+  updateTeamSettings,
+  updateMemberRole,
   deleteTeamAndMembers,
   createInvite,
   getInviteByToken,
@@ -443,6 +445,59 @@ const teamsRouter = router({
       });
 
       return { success: true, name: input.name.trim() };
+    }),
+
+  /**
+   * Update team security settings (owner only).
+   * requireBiometric: all members must have a passkey to confirm sessions.
+   */
+  updateSettings: protectedProcedure
+    .input(z.object({
+      teamId: z.number().int().positive(),
+      requireBiometric: z.boolean().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const team = await getTeamById(input.teamId);
+      if (!team) throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
+      if (team.ownerId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Only the team owner can change settings" });
+      }
+      await updateTeamSettings(input.teamId, { requireBiometric: input.requireBiometric });
+      await appendAuditLog({
+        teamId: input.teamId, actorId: ctx.user.id, action: "team.settings_updated",
+        metadata: JSON.stringify({ requireBiometric: input.requireBiometric }),
+      });
+      return { success: true };
+    }),
+
+  /**
+   * Promote or demote a member's role (owner only).
+   * Owners cannot be demoted through this endpoint.
+   */
+  updateMemberRole: protectedProcedure
+    .input(z.object({
+      teamId: z.number().int().positive(),
+      userId: z.number().int().positive(),
+      role: z.enum(["admin", "member"]),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const team = await getTeamById(input.teamId);
+      if (!team) throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
+      if (team.ownerId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Only the team owner can change roles" });
+      }
+      if (input.userId === ctx.user.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "You cannot change your own role" });
+      }
+      if (input.userId === team.ownerId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot change the owner's role" });
+      }
+      await updateMemberRole(input.teamId, input.userId, input.role);
+      await appendAuditLog({
+        teamId: input.teamId, actorId: ctx.user.id, action: "member.role_changed",
+        metadata: JSON.stringify({ userId: input.userId, newRole: input.role }),
+      });
+      return { success: true };
     }),
 
   /**

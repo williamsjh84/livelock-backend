@@ -144,6 +144,55 @@ async function startServer() {
     })
   );
 
+  // ── Audit CSV export ─────────────────────────────────────────────────────
+  app.get("/api/audit/export/:teamId", async (req, res) => {
+    try {
+      const { createContext: makeCtx } = await import("./_core/context");
+      const ctx = await makeCtx({ req: req as any, res: res as any });
+      if (!ctx.user) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+      const teamId = parseInt(req.params.teamId);
+      const { getTeamById, getTeamMembers, getAuditLogForTeams } = await import("./sessionDb");
+      const team = await getTeamById(teamId);
+      if (!team) { res.status(404).json({ error: "Team not found" }); return; }
+
+      const members = await getTeamMembers(teamId);
+      const isMember = members.some(m => m.userId === ctx.user!.id);
+      if (!isMember) { res.status(403).json({ error: "Access denied" }); return; }
+
+      const entries = await getAuditLogForTeams([teamId], 10000, 0);
+
+      // Build member lookup map
+      const memberMap = new Map(members.map(m => [m.userId, m.displayName ?? m.name ?? m.email ?? String(m.userId)]));
+
+      // CSV header
+      const rows = [
+        ["Timestamp", "Actor", "Action", "Session ID", "Biometric Verified", "Details"].join(","),
+        ...entries.map(e => {
+          const meta = e.metadata ? JSON.parse(e.metadata) : {};
+          return [
+            new Date(e.createdAt).toISOString(),
+            `"${memberMap.get(e.actorId) ?? e.actorId}"`,
+            e.action,
+            e.sessionId ?? "",
+            meta.biometricVerified !== undefined ? (meta.biometricVerified ? "Yes" : "No") : "",
+            `"${JSON.stringify(meta).replace(/"/g, '""')}"`,
+          ].join(",");
+        }),
+      ];
+
+      const csv = rows.join("\n");
+      const filename = `livelock-audit-${team.name.replace(/[^a-z0-9]/gi, "-").toLowerCase()}-${new Date().toISOString().split("T")[0]}.csv`;
+
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(csv);
+    } catch (err) {
+      console.error("[AuditExport]", err);
+      res.status(500).json({ error: "Export failed" });
+    }
+  });
+
   // ── Static files ──────────────────────────────────────────────────────────
   // In production: __dirname is dist/server, so public is at dist/public
   // We also check the root public folder as fallback

@@ -3,7 +3,7 @@
  * Paginated, filterable, exportable audit log for the team.
  */
 import { useState } from "react";
-import { ClipboardList, CheckCircle2, XCircle, Timer, UserPlus, UserMinus, Users, Shield, Download } from "lucide-react";
+import { ClipboardList, CheckCircle2, XCircle, Timer, UserPlus, UserMinus, Users, Shield, Download, Fingerprint } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 
@@ -61,26 +61,13 @@ export default function AuditLog() {
 
   const { data, isLoading } = trpc.audit.getLog.useQuery({ limit, offset });
   const entries = data?.entries ?? [];
+  const teamIds = data?.teamIds ?? [];
 
   const handleExportCsv = () => {
-    if (!entries.length) return;
-    const headers = ["ID", "Action", "Actor ID", "Session ID", "Created At", "Metadata"];
-    const rows = entries.map(e => [
-      e.id,
-      e.action,
-      e.actorId,
-      e.sessionId ?? "",
-      new Date(e.createdAt).toISOString(),
-      e.metadata ?? "",
-    ]);
-    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `livelock-audit-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    // Use the server-side export for the first team (includes proper names + biometric status)
+    if (teamIds.length > 0) {
+      window.open(`/api/audit/export/${teamIds[0]}`, "_blank");
+    }
   };
 
   return (
@@ -150,6 +137,11 @@ export default function AuditLog() {
                       {entry.sessionId && (
                         <span className="text-[9px] text-white/20 font-mono">
                           #{entry.sessionId.slice(0, 8)}
+                        </span>
+                      )}
+                      {meta.biometricVerified === true && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold text-[#00C9B1] bg-[#00C9B1]/10 border border-[#00C9B1]/20">
+                          <Fingerprint size={8} /> Biometric
                         </span>
                       )}
                     </div>

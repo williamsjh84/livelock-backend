@@ -112,6 +112,8 @@ export const teams = mysqlTable("teams", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 200 }).notNull(),
   ownerId: int("ownerId").notNull(),
+  /** If true, members without a passkey cannot confirm verification sessions */
+  requireBiometric: boolean("requireBiometric").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -125,7 +127,7 @@ export const teamMembers = mysqlTable("team_members", {
   id: int("id").autoincrement().primaryKey(),
   teamId: int("teamId").notNull(),
   userId: int("userId").notNull(),
-  role: mysqlEnum("role", ["owner", "member"]).default("member").notNull(),
+  role: mysqlEnum("role", ["owner", "admin", "member"]).default("member").notNull(),
   joinedAt: timestamp("joinedAt").defaultNow().notNull(),
 });
 

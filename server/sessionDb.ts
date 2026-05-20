@@ -214,6 +214,20 @@ export async function updateTeamName(teamId: number, name: string) {
   await db.update(teams).set({ name }).where(eq(teams.id, teamId));
 }
 
+export async function updateTeamSettings(teamId: number, settings: { requireBiometric?: boolean }) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(teams).set(settings).where(eq(teams.id, teamId));
+}
+
+export async function updateMemberRole(teamId: number, userId: number, role: "admin" | "member") {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(teamMembers).set({ role }).where(
+    and(eq(teamMembers.teamId, teamId), eq(teamMembers.userId, userId))
+  );
+}
+
 export async function deleteTeamAndMembers(teamId: number) {
   const db = await getDb();
   if (!db) return;

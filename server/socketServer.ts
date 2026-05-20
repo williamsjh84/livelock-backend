@@ -17,11 +17,31 @@ import { Server as HttpServer } from "http";
 import { Server as SocketIOServer, Socket } from "socket.io";
 import { jwtVerify } from "jose";
 import { ENV } from "./_core/env";
-import { getSessionById, updateSessionStatus, appendAuditLog } from "./sessionDb";
+import { getSessionById, updateSessionStatus, appendAuditLog, getTeamById } from "./sessionDb";
 import { verifyAuthenticationResponse } from "@simplewebauthn/server";
 import { consumeChallenge, getCredentialsByUserId, updateCredentialCounter } from "./webauthnDb";
 
 type AuthenticationResponseJSON = Parameters<typeof verifyAuthenticationResponse>[0]["response"];
+
+/**
+ * Check if the team's requireBiometric setting blocks a user without a passkey.
+ * Returns an error message if blocked, null if allowed.
+ */
+async function checkBiometricPolicy(sessionId: string, userId: number): Promise<string | null> {
+  try {
+    const session = await getSessionById(sessionId);
+    if (!session?.teamId) return null; // no team, no policy
+    const team = await getTeamById(session.teamId);
+    if (!team?.requireBiometric) return null; // policy not enabled
+    const credentials = await getCredentialsByUserId(userId);
+    if (credentials.length === 0) {
+      return "This team requires a passkey. Register a passkey in Settings before you can confirm verifications.";
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Verify a WebAuthn assertion for session confirmation.
@@ -205,6 +225,13 @@ export function attachSocketServer(httpServer: HttpServer): SocketIOServer {
       if (!session || session.responderId !== userId) return;
       if (session.status !== "active") return;
 
+      // Enforce team biometric policy — block users without passkeys if required
+      const policyBlock = await checkBiometricPolicy(sessionId, userId);
+      if (policyBlock) {
+        socket.emit("session:biometric-required", { sessionId, reason: policyBlock });
+        return;
+      }
+
       // Verify biometric — null means no passkeys (allowed), false means failed
       const biometricResult = assertionResponse
         ? await verifySessionBiometric(userId, assertionResponse)
@@ -253,6 +280,13 @@ export function attachSocketServer(httpServer: HttpServer): SocketIOServer {
       const session = await getSessionById(sessionId);
       if (!session || session.initiatorId !== userId) return;
       if (session.status !== "active") return;
+
+      // Enforce team biometric policy
+      const policyBlock = await checkBiometricPolicy(sessionId, userId);
+      if (policyBlock) {
+        socket.emit("session:biometric-required", { sessionId, reason: policyBlock });
+        return;
+      }
 
       // Verify biometric
       const biometricResult = assertionResponse

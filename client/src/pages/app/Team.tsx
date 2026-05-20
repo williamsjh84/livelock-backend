@@ -3,7 +3,7 @@
  * Supports multiple teams per user.
  */
 import { useState } from "react";
-import { Users, UserPlus, Crown, Shield, Copy, Check, Trash2, Clock, AlertTriangle, Plus, ChevronDown, ChevronUp, X, Mail, Phone, Briefcase, Calendar } from "lucide-react";
+import { Users, UserPlus, Crown, Shield, Copy, Check, Trash2, Clock, AlertTriangle, Plus, ChevronDown, ChevronUp, X, Mail, Phone, Briefcase, Calendar, Settings, Download, ShieldAlert, ChevronRight } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 
@@ -37,6 +37,10 @@ export default function Team() {
   const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [collapsedTeams, setCollapsedTeams] = useState<Set<number>>(new Set());
   const [selectedMember, setSelectedMember] = useState<MemberProfile | null>(null);
+  const [settingsTeamId, setSettingsTeamId] = useState<number | null>(null);
+
+  const updateSettingsMutation = trpc.teams.updateSettings.useMutation({ onSuccess: () => refetch() });
+  const updateRoleMutation = trpc.teams.updateMemberRole.useMutation({ onSuccess: () => refetch() });
 
   const handleCreateTeam = async () => {
     if (!newTeamName.trim()) return;
@@ -100,6 +104,18 @@ export default function Team() {
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Failed to delete team");
     }
+  };
+
+  const handleExportAudit = (teamId: number) => {
+    window.open(`/api/audit/export/${teamId}`, "_blank");
+  };
+
+  const handleToggleBiometric = async (teamId: number, current: boolean) => {
+    await updateSettingsMutation.mutateAsync({ teamId, requireBiometric: !current });
+  };
+
+  const handleRoleChange = async (teamId: number, userId: number, newRole: "admin" | "member") => {
+    await updateRoleMutation.mutateAsync({ teamId, userId, role: newRole });
   };
 
   const handleLeaveTeam = async (teamId: number, teamName: string) => {
@@ -192,7 +208,7 @@ export default function Team() {
             <div key={team.id} className="rounded-2xl border border-white/[0.08] bg-white/[0.02] overflow-hidden">
 
               {/* Team header */}
-              <div className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => toggleCollapse(team.id)}>
+              <div className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => toggleCollapse(team.id)} >
                 <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#00C9B1]/20 to-[#0077B6]/20 border border-[#00C9B1]/20 flex items-center justify-center flex-shrink-0">
                   <span className="text-sm font-bold text-[#00C9B1]">{team.name.charAt(0).toUpperCase()}</span>
                 </div>
@@ -204,6 +220,15 @@ export default function Team() {
                   <p className="text-[10px] text-white/30">{members.length} member{members.length !== 1 ? "s" : ""}{pendingInvites.length > 0 ? ` · ${pendingInvites.length} pending` : ""}</p>
                 </div>
                 {collapsed ? <ChevronDown size={15} className="text-white/30 flex-shrink-0" /> : <ChevronUp size={15} className="text-white/30 flex-shrink-0" />}
+                {isOwner && (
+                  <button
+                    onClick={e => { e.stopPropagation(); setSettingsTeamId(settingsTeamId === team.id ? null : team.id); }}
+                    className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors flex-shrink-0 ${settingsTeamId === team.id ? "bg-[#00C9B1]/20 text-[#00C9B1]" : "text-white/20 hover:text-white/60 hover:bg-white/[0.06]"}`}
+                    title="Team settings"
+                  >
+                    <Settings size={13} />
+                  </button>
+                )}
               </div>
 
               {!collapsed && (
@@ -305,6 +330,7 @@ export default function Team() {
                                   {isMe && <span className="text-[10px] text-white/30 ml-1">(you)</span>}
                                 </p>
                                 {member.role === "owner" && <Crown size={10} className="text-amber-400 flex-shrink-0" />}
+                              {member.role === "admin" && <Shield size={10} className="text-[#00C9B1] flex-shrink-0" />}
                               </div>
                               <p className="text-[10px] text-white/30 truncate">{member.email}</p>
                             </div>
@@ -329,6 +355,72 @@ export default function Team() {
                       })}
                     </div>
                   </div>
+
+                  {/* Admin Settings Panel */}
+                  {isOwner && settingsTeamId === team.id && (
+                    <div className="p-4 rounded-2xl border border-[#00C9B1]/15 bg-[#00C9B1]/5 space-y-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Settings size={12} className="text-[#00C9B1]" />
+                        <p className="text-xs font-bold text-white/70" style={font}>Team Settings</p>
+                      </div>
+
+                      {/* Require biometric toggle */}
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <ShieldAlert size={12} className="text-amber-400" />
+                            <p className="text-xs font-semibold text-white/80">Require Passkey</p>
+                          </div>
+                          <p className="text-[10px] text-white/40">Members without a passkey cannot confirm verifications</p>
+                        </div>
+                        <button
+                          onClick={() => handleToggleBiometric(team.id, (team as any).requireBiometric ?? false)}
+                          disabled={updateSettingsMutation.isPending}
+                          className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ml-4 ${(team as any).requireBiometric ? "bg-[#00C9B1]" : "bg-white/[0.10]"} disabled:opacity-50`}
+                        >
+                          <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${(team as any).requireBiometric ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+
+                      {/* Role management */}
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-white/30 font-semibold mb-2">Member Roles</p>
+                        <div className="space-y-1.5">
+                          {members.filter(m => m.userId !== user?.id).map(m => {
+                            const name = m.displayName || m.name || m.email || "Unknown";
+                            return (
+                              <div key={m.userId} className="flex items-center gap-3 p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                                <p className="text-xs text-white/70 flex-1 truncate">{name}</p>
+                                {m.role === "owner" ? (
+                                  <span className="text-[10px] text-amber-400 font-semibold">Owner</span>
+                                ) : (
+                                  <select
+                                    value={m.role}
+                                    onChange={e => handleRoleChange(team.id, m.userId, e.target.value as "admin" | "member")}
+                                    className="text-[10px] bg-white/[0.06] border border-white/[0.10] rounded-lg px-2 py-1 text-white/70 focus:outline-none focus:border-[#00C9B1]/40"
+                                    style={font}
+                                  >
+                                    <option value="member">Member</option>
+                                    <option value="admin">Admin</option>
+                                  </select>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <p className="text-[10px] text-white/25 mt-1.5">Admins can invite members and view the audit log</p>
+                      </div>
+
+                      {/* Audit export */}
+                      <button
+                        onClick={() => handleExportAudit(team.id)}
+                        className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-xl border border-white/[0.08] bg-white/[0.03] text-xs text-white/60 hover:text-white hover:bg-white/[0.06] transition-colors"
+                      >
+                        <Download size={12} />
+                        Export Audit Log (CSV)
+                      </button>
+                    </div>
+                  )}
 
                   {/* Footer actions */}
                   <div className="flex gap-2 pt-1 border-t border-white/[0.06]">
