@@ -3,9 +3,21 @@
  * Supports multiple teams per user.
  */
 import { useState } from "react";
-import { Users, UserPlus, Crown, Shield, Copy, Check, Trash2, Clock, AlertTriangle, Plus, ChevronDown, ChevronUp } from "lucide-react";
+import { Users, UserPlus, Crown, Shield, Copy, Check, Trash2, Clock, AlertTriangle, Plus, ChevronDown, ChevronUp, X, Mail, Phone, Briefcase, Calendar } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
+
+type MemberProfile = {
+  userId: number;
+  displayName: string | null;
+  name: string | null;
+  email: string | null;
+  title?: string | null;
+  phone?: string | null;
+  role: string;
+  hasPasskey: boolean;
+  joinedAt: Date;
+};
 
 export default function Team() {
   const { data: user } = trpc.auth.me.useQuery();
@@ -24,6 +36,7 @@ export default function Team() {
   const [removingId, setRemovingId] = useState<number | null>(null);
   const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [collapsedTeams, setCollapsedTeams] = useState<Set<number>>(new Set());
+  const [selectedMember, setSelectedMember] = useState<MemberProfile | null>(null);
 
   const handleCreateTeam = async () => {
     if (!newTeamName.trim()) return;
@@ -281,7 +294,7 @@ export default function Team() {
                         const displayName = member.displayName || member.name || member.email || "Unknown";
                         const initials = displayName.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2);
                         return (
-                          <div key={member.userId} className="flex items-center gap-3 p-2.5 rounded-xl border border-white/[0.06] bg-white/[0.02]">
+                          <div key={member.userId} className="flex items-center gap-3 p-2.5 rounded-xl border border-white/[0.06] bg-white/[0.02] cursor-pointer hover:bg-white/[0.04] transition-colors" onClick={() => setSelectedMember(member as MemberProfile)}>
                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-white/[0.06] to-white/[0.02] border border-white/[0.08] flex items-center justify-center flex-shrink-0">
                               <span className="text-xs font-bold text-white/50">{initials}</span>
                             </div>
@@ -302,7 +315,7 @@ export default function Team() {
                               }
                               {isOwner && !isMe && (
                                 <button
-                                  onClick={() => handleRemove(team.id, member.userId)}
+                                  onClick={e => { e.stopPropagation(); handleRemove(team.id, member.userId); }}
                                   disabled={removingId === member.userId}
                                   className="w-6 h-6 flex items-center justify-center rounded-lg text-white/20 hover:text-red-400 hover:bg-red-400/10 transition-colors"
                                   title="Remove member"
@@ -331,6 +344,89 @@ export default function Team() {
           );
         })}
       </div>
+
+      {/* ── Member Profile Modal ───────────────────────────────────────── */}
+      {selectedMember && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={() => setSelectedMember(null)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            className="relative w-full max-w-sm rounded-2xl border border-white/[0.10] bg-[#0D1F38] p-6 shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setSelectedMember(null)}
+              className="absolute top-4 right-4 w-7 h-7 flex items-center justify-center rounded-lg text-white/30 hover:text-white/70 hover:bg-white/[0.08] transition-colors"
+            >
+              <X size={15} />
+            </button>
+
+            {/* Avatar + name */}
+            <div className="flex items-center gap-4 mb-5">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#00C9B1]/20 to-[#0077B6]/20 border border-[#00C9B1]/20 flex items-center justify-center flex-shrink-0">
+                <span className="text-xl font-bold text-[#00C9B1]">
+                  {(selectedMember.displayName || selectedMember.name || selectedMember.email || "?").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2)}
+                </span>
+              </div>
+              <div>
+                <p className="text-base font-bold text-white" style={font}>
+                  {selectedMember.displayName || selectedMember.name || "Unknown"}
+                </p>
+                {(selectedMember as any).title && (
+                  <p className="text-xs text-[#00C9B1]/80 mt-0.5">{(selectedMember as any).title}</p>
+                )}
+                <div className="flex items-center gap-1.5 mt-1">
+                  <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full border ${selectedMember.role === "owner" ? "text-amber-400 bg-amber-400/10 border-amber-400/20" : "text-white/40 bg-white/[0.06] border-white/[0.08]"}`}>
+                    {selectedMember.role === "owner" ? "Owner" : "Member"}
+                  </span>
+                  {selectedMember.hasPasskey && (
+                    <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full text-[#00C9B1] bg-[#00C9B1]/10 border border-[#00C9B1]/20 flex items-center gap-1">
+                      <Shield size={8} /> Passkey
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Details */}
+            <div className="space-y-3">
+              {selectedMember.email && (
+                <div className="flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                  <Mail size={14} className="text-white/30 flex-shrink-0" />
+                  <div>
+                    <p className="text-[10px] text-white/30">Email</p>
+                    <p className="text-sm text-white/80">{selectedMember.email}</p>
+                  </div>
+                </div>
+              )}
+              {(selectedMember as any).phone && (
+                <div className="flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                  <Phone size={14} className="text-white/30 flex-shrink-0" />
+                  <div>
+                    <p className="text-[10px] text-white/30">Mobile</p>
+                    <p className="text-sm text-white/80">{(selectedMember as any).phone}</p>
+                  </div>
+                </div>
+              )}
+              {(selectedMember as any).title && (
+                <div className="flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                  <Briefcase size={14} className="text-white/30 flex-shrink-0" />
+                  <div>
+                    <p className="text-[10px] text-white/30">Title</p>
+                    <p className="text-sm text-white/80">{(selectedMember as any).title}</p>
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                <Calendar size={14} className="text-white/30 flex-shrink-0" />
+                <div>
+                  <p className="text-[10px] text-white/30">Member Since</p>
+                  <p className="text-sm text-white/80">{new Date(selectedMember.joinedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

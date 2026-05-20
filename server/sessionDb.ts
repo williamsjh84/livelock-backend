@@ -192,6 +192,8 @@ export async function getTeamMembers(teamId: number) {
       name: users.name,
       displayName: users.displayName,
       email: users.email,
+      title: users.title,
+      phone: users.phone,
       hasPasskey: users.hasPasskey,
     })
     .from(teamMembers)

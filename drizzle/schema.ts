@@ -26,6 +26,8 @@ export const users = mysqlTable("users", {
   hasPasskey: boolean("hasPasskey").default(false).notNull(),
   /** Hashed password for email/password auth (format: salt:hash) */
   passwordHash: varchar("passwordHash", { length: 255 }),
+  /** Job title, e.g. "CFO", "Head of Security" */
+  title: varchar("title", { length: 100 }),
   /** E.164 phone number for SMS notifications, e.g. +12125551234 */
   phone: varchar("phone", { length: 20 }),
   /** Whether this user has opted in to SMS notifications */

@@ -1,9 +1,9 @@
 /**
  * LiveLock — Settings Page (/app/settings)
- * Manage passkeys, display name, and account info.
+ * Manage profile, passkeys, and notification preferences.
  */
 import { useState, useEffect } from "react";
-import { Shield, Plus, Trash2, Smartphone, Monitor, Key, User, CheckCircle2, Bell, MessageSquare, Phone } from "lucide-react";
+import { Shield, Plus, Trash2, Smartphone, Monitor, Key, User, CheckCircle2, Bell, MessageSquare, Pencil, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { startRegistration } from "@simplewebauthn/browser";
@@ -15,40 +15,60 @@ export default function Settings() {
   const deleteCredMutation = trpc.webauthn.deleteCredential.useMutation({ onSuccess: () => refetchCreds() });
   const regOptionsMutation = trpc.webauthn.registrationOptions.useMutation();
   const verifyRegMutation = trpc.webauthn.verifyRegistration.useMutation({ onSuccess: () => { refetchCreds(); refetchUser(); } });
-  const updateProfileMutation = trpc.auth.updateProfile.useMutation({ onSuccess: () => refetchUser() });
+  const updateProfileMutation = trpc.auth.updateProfile.useMutation({ onSuccess: () => { refetchUser(); setEditingProfile(false); } });
   const { data: vapidData } = trpc.notifications.getVapidPublicKey.useQuery();
   const { data: pushStatus, refetch: refetchPushStatus } = trpc.notifications.getPushStatus.useQuery();
-  const subscribeMutation = trpc.notifications.subscribe.useMutation({ onSuccess: () => refetchPushStatus() });
   const unsubscribeMutation = trpc.notifications.unsubscribe.useMutation({ onSuccess: () => refetchPushStatus() });
   const updateSmsMutation = trpc.notifications.updateSmsSettings.useMutation();
 
+  const font = { fontFamily: "Space Grotesk, sans-serif" };
+
+  // ── Profile edit state ────────────────────────────────────────────────────
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState({ displayName: "", title: "", phone: "" });
+  const [profileError, setProfileError] = useState("");
+  const [profileSaved, setProfileSaved] = useState(false);
+
+  // ── Push / SMS state ──────────────────────────────────────────────────────
   const [pushLoading, setPushLoading] = useState(false);
   const [pushPermission, setPushPermission] = useState<string>("default");
-  const [phone, setPhone] = useState(user?.phone ?? "");
   const [smsEnabled, setSmsEnabled] = useState(user?.smsNotifications ?? false);
   const [smsSaved, setSmsSaved] = useState(false);
 
-  useEffect(() => {
-    setPushPermission(getNotificationPermission());
-  }, []);
+  // ── Passkey state ─────────────────────────────────────────────────────────
+  const [addingKey, setAddingKey] = useState(false);
+  const [deviceName, setDeviceName] = useState("");
+
+  useEffect(() => { setPushPermission(getNotificationPermission()); }, []);
 
   useEffect(() => {
     if (user) {
-      setPhone(user.phone ?? "");
-      setPhoneInput(user.phone ?? "");
       setSmsEnabled(user.smsNotifications ?? false);
+      if (!editingProfile) {
+        setProfileForm({
+          displayName: user.displayName ?? user.name ?? "",
+          title: (user as any).title ?? "",
+          phone: user.phone ?? "",
+        });
+      }
     }
-  }, [user]);
+  }, [user, editingProfile]);
 
-  const [addingKey, setAddingKey] = useState(false);
-  const [deviceName, setDeviceName] = useState("");
-  const [editingName, setEditingName] = useState(false);
-  const [displayName, setDisplayName] = useState(user?.displayName ?? user?.name ?? "");
-  const [nameError, setNameError] = useState("");
-  const [editingPhone, setEditingPhone] = useState(false);
-  const [phoneInput, setPhoneInput] = useState(user?.phone ?? "");
-  const [phoneError, setPhoneError] = useState("");
-  const [phoneSaved, setPhoneSaved] = useState(false);
+  const handleSaveProfile = async () => {
+    if (!profileForm.displayName.trim()) { setProfileError("Name cannot be empty"); return; }
+    setProfileError("");
+    try {
+      await updateProfileMutation.mutateAsync({
+        displayName: profileForm.displayName.trim(),
+        title: profileForm.title.trim() || undefined,
+        phone: profileForm.phone.trim() || null,
+      });
+      setProfileSaved(true);
+      setTimeout(() => setProfileSaved(false), 3000);
+    } catch (err: unknown) {
+      setProfileError(err instanceof Error ? err.message : "Failed to save profile");
+    }
+  };
 
   const handleAddPasskey = async () => {
     if (!user?.email) return;
@@ -56,27 +76,18 @@ export default function Settings() {
     try {
       const result = await regOptionsMutation.mutateAsync({ email: user.email, displayName: user.displayName ?? user.name ?? user.email });
       const response = await startRegistration({ optionsJSON: result.options });
-      await verifyRegMutation.mutateAsync({
-        userId: result.userId,
-        response,
-        deviceName: deviceName || undefined,
-      });
+      await verifyRegMutation.mutateAsync({ userId: result.userId, response, deviceName: deviceName || undefined });
       setDeviceName("");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to add passkey";
-      if (!msg.includes("cancelled") && !msg.includes("abort")) {
-        alert(msg);
-      }
+      if (!msg.includes("cancelled") && !msg.includes("abort")) alert(msg);
     } finally {
       setAddingKey(false);
     }
   };
 
   const handleDeleteCred = async (credentialId: string) => {
-    if ((credentials?.length ?? 0) <= 1) {
-      alert("You cannot remove your only passkey. Add another device first.");
-      return;
-    }
+    if ((credentials?.length ?? 0) <= 1) { alert("You cannot remove your only passkey. Add another device first."); return; }
     if (!confirm("Remove this passkey? You will no longer be able to sign in from this device.")) return;
     await deleteCredMutation.mutateAsync({ credentialId });
   };
@@ -91,137 +102,109 @@ export default function Settings() {
     <div className="p-6 max-w-xl mx-auto">
       <div className="mb-6">
         <p className="text-[10px] uppercase tracking-widest text-[#00C9B1]/60 mb-1">Settings</p>
-        <h1 className="text-xl font-bold text-white" style={{ fontFamily: "Space Grotesk, sans-serif" }}>Account & Security</h1>
-        <p className="text-xs text-white/40 mt-1">Manage your passkeys and profile.</p>
+        <h1 className="text-xl font-bold text-white" style={font}>Account & Security</h1>
+        <p className="text-xs text-white/40 mt-1">Manage your profile, passkeys, and notifications.</p>
       </div>
 
-      {/* Profile section */}
+      {/* ── Profile ──────────────────────────────────────────────────────── */}
       <div className="p-5 rounded-2xl border border-white/[0.08] bg-white/[0.02] mb-5">
-        <div className="flex items-center gap-2 mb-4">
-          <User size={14} className="text-white/40" />
-          <p className="text-sm font-bold text-white" style={{ fontFamily: "Space Grotesk, sans-serif" }}>Profile</p>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <User size={14} className="text-white/40" />
+            <p className="text-sm font-bold text-white" style={font}>Profile</p>
+          </div>
+          {!editingProfile && (
+            <button
+              onClick={() => setEditingProfile(true)}
+              className="flex items-center gap-1.5 text-[11px] text-[#00C9B1]/60 hover:text-[#00C9B1] transition-colors"
+            >
+              <Pencil size={11} /> Edit
+            </button>
+          )}
         </div>
 
-        <div className="space-y-3">
-          <div>
-            <p className="text-[10px] text-white/30 mb-1">Email</p>
-            <p className="text-sm text-white/60">{user?.email ?? "—"}</p>
+        {editingProfile ? (
+          <div className="space-y-3">
+            <div>
+              <label className="text-[10px] text-white/30 mb-1 block">Display Name *</label>
+              <input
+                type="text"
+                value={profileForm.displayName}
+                onChange={e => setProfileForm(f => ({ ...f, displayName: e.target.value }))}
+                className="w-full px-3 py-2 rounded-xl border border-white/[0.08] bg-white/[0.03] text-sm text-white focus:outline-none focus:border-[#00C9B1]/40 transition-all"
+                style={font}
+                maxLength={100}
+                placeholder="Your full name"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-white/30 mb-1 block">Title</label>
+              <input
+                type="text"
+                value={profileForm.title}
+                onChange={e => setProfileForm(f => ({ ...f, title: e.target.value }))}
+                className="w-full px-3 py-2 rounded-xl border border-white/[0.08] bg-white/[0.03] text-sm text-white focus:outline-none focus:border-[#00C9B1]/40 transition-all"
+                style={font}
+                maxLength={100}
+                placeholder="e.g. CFO, Head of Security, Engineer"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-white/30 mb-1 block">Mobile Number</label>
+              <input
+                type="tel"
+                value={profileForm.phone}
+                onChange={e => setProfileForm(f => ({ ...f, phone: e.target.value }))}
+                className="w-full px-3 py-2 rounded-xl border border-white/[0.08] bg-white/[0.03] text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-[#00C9B1]/40 transition-all"
+                style={font}
+                maxLength={20}
+                placeholder="+12125551234"
+              />
+              <p className="text-[10px] text-white/20 mt-1">Include country code for SMS notifications</p>
+            </div>
+            <div>
+              <label className="text-[10px] text-white/30 mb-1 block">Email</label>
+              <p className="text-sm text-white/40 px-3 py-2">{user?.email ?? "—"}</p>
+            </div>
+            {profileError && <p className="text-[10px] text-red-400">{profileError}</p>}
+            <div className="flex gap-2 pt-1">
+              <Button
+                className="bg-[#00C9B1] hover:bg-[#00C9B1]/80 text-[#0A1628] font-bold"
+                onClick={handleSaveProfile}
+                disabled={updateProfileMutation.isPending}
+              >
+                {updateProfileMutation.isPending ? "Saving…" : "Save Profile"}
+              </Button>
+              <Button variant="outline" className="border-white/[0.08] text-white/40" onClick={() => { setEditingProfile(false); setProfileError(""); }}>
+                <X size={13} className="mr-1" /> Cancel
+              </Button>
+            </div>
           </div>
-          <div>
-            <p className="text-[10px] text-white/30 mb-1">Display Name</p>
-            {editingName ? (
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={displayName}
-                  onChange={e => { setDisplayName(e.target.value); setNameError(""); }}
-                  className="flex-1 px-3 py-1.5 rounded-xl border border-white/[0.08] bg-white/[0.03] text-sm text-white focus:outline-none focus:border-[#00C9B1]/40 transition-all"
-                  style={{ fontFamily: "Space Grotesk, sans-serif" }}
-                  maxLength={100}
-                />
-                <Button
-                  size="sm"
-                  className="bg-[#00C9B1] hover:bg-[#00C9B1]/80 text-[#0A1628] font-bold"
-                  onClick={async () => {
-                    if (!displayName.trim()) { setNameError("Name cannot be empty"); return; }
-                    try {
-                      await updateProfileMutation.mutateAsync({ displayName: displayName.trim() });
-                      setEditingName(false);
-                    } catch (err: unknown) {
-                      setNameError(err instanceof Error ? err.message : "Failed to save name");
-                    }
-                  }}
-                  disabled={updateProfileMutation.isPending}
-                >
-                  Save
-                </Button>
-                <Button size="sm" variant="outline" className="border-white/[0.08] text-white/40" onClick={() => setEditingName(false)}>
-                  Cancel
-                </Button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <p className="text-sm text-white/70">{user?.displayName ?? user?.name ?? "—"}</p>
-                <button
-                  onClick={() => { setDisplayName(user?.displayName ?? user?.name ?? ""); setEditingName(true); }}
-                  className="text-[10px] text-[#00C9B1]/60 hover:text-[#00C9B1] transition-colors"
-                >
-                  Edit
-                </button>
+        ) : (
+          <div className="space-y-3">
+            <ProfileRow label="Email" value={user?.email ?? "—"} />
+            <ProfileRow label="Display Name" value={user?.displayName ?? user?.name ?? "—"} />
+            <ProfileRow label="Title" value={(user as any)?.title || <span className="italic text-white/25">Not set</span>} />
+            <ProfileRow label="Mobile" value={user?.phone || <span className="italic text-white/25">Not set</span>} />
+            {profileSaved && (
+              <div className="flex items-center gap-1.5 text-[11px] text-[#00C9B1]">
+                <CheckCircle2 size={12} /> Profile saved
               </div>
             )}
-            {nameError && <p className="text-[10px] text-red-400 mt-1">{nameError}</p>}
           </div>
-
-          {/* Phone number */}
-          <div>
-            <p className="text-[10px] text-white/30 mb-1">Mobile Number</p>
-            {editingPhone ? (
-              <div className="flex gap-2">
-                <input
-                  type="tel"
-                  value={phoneInput}
-                  onChange={e => { setPhoneInput(e.target.value); setPhoneError(""); }}
-                  placeholder="+12125551234"
-                  maxLength={20}
-                  className="flex-1 px-3 py-1.5 rounded-xl border border-white/[0.08] bg-white/[0.03] text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-[#00C9B1]/40 transition-all"
-                  style={{ fontFamily: "Space Grotesk, sans-serif" }}
-                />
-                <Button
-                  size="sm"
-                  className="bg-[#00C9B1] hover:bg-[#00C9B1]/80 text-[#0A1628] font-bold"
-                  onClick={async () => {
-                    try {
-                      await updateSmsMutation.mutateAsync({ phone: phoneInput.trim() || null, smsNotifications: smsEnabled });
-                      setPhone(phoneInput.trim());
-                      setEditingPhone(false);
-                      setPhoneSaved(true);
-                      setTimeout(() => setPhoneSaved(false), 3000);
-                      refetchUser();
-                    } catch (err: unknown) {
-                      setPhoneError(err instanceof Error ? err.message : "Failed to save");
-                    }
-                  }}
-                  disabled={updateSmsMutation.isPending}
-                >
-                  Save
-                </Button>
-                <Button size="sm" variant="outline" className="border-white/[0.08] text-white/40" onClick={() => { setEditingPhone(false); setPhoneInput(phone); }}>
-                  Cancel
-                </Button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1.5">
-                  <Phone size={12} className="text-white/25" />
-                  <p className="text-sm text-white/70">{phone || <span className="text-white/25 italic">Not set</span>}</p>
-                </div>
-                {phoneSaved && <CheckCircle2 size={12} className="text-[#00C9B1]" />}
-                <button
-                  onClick={() => { setPhoneInput(phone); setEditingPhone(true); }}
-                  className="text-[10px] text-[#00C9B1]/60 hover:text-[#00C9B1] transition-colors"
-                >
-                  {phone ? "Edit" : "Add"}
-                </button>
-              </div>
-            )}
-            {phoneError && <p className="text-[10px] text-red-400 mt-1">{phoneError}</p>}
-            <p className="text-[10px] text-white/20 mt-1">Used for SMS verification alerts. Include country code, e.g. +12125551234</p>
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* Passkeys section */}
+      {/* ── Passkeys ─────────────────────────────────────────────────────── */}
       <div className="p-5 rounded-2xl border border-white/[0.08] bg-white/[0.02]">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Shield size={14} className="text-[#00C9B1]" />
-            <p className="text-sm font-bold text-white" style={{ fontFamily: "Space Grotesk, sans-serif" }}>Passkeys</p>
+            <p className="text-sm font-bold text-white" style={font}>Passkeys</p>
           </div>
           <span className="text-[10px] text-white/30">{credentials?.length ?? 0} device{(credentials?.length ?? 0) !== 1 ? "s" : ""}</span>
         </div>
 
-        {/* Existing passkeys */}
         {credentials && credentials.length > 0 ? (
           <div className="space-y-2 mb-4">
             {credentials.map(cred => (
@@ -230,12 +213,8 @@ export default function Settings() {
                   {getDeviceIcon(cred.authenticatorAttachment)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white/80 truncate" style={{ fontFamily: "Space Grotesk, sans-serif" }}>
-                    {cred.deviceName}
-                  </p>
-                  <p className="text-[10px] text-white/25">
-                    Added {new Date(cred.createdAt).toLocaleDateString()} · Last used {new Date(cred.lastUsedAt).toLocaleDateString()}
-                  </p>
+                  <p className="text-sm font-medium text-white/80 truncate" style={font}>{cred.deviceName}</p>
+                  <p className="text-[10px] text-white/25">Added {new Date(cred.createdAt).toLocaleDateString()} · Last used {new Date(cred.lastUsedAt).toLocaleDateString()}</p>
                 </div>
                 {cred.userVerified && (
                   <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#00C9B1]/10 border border-[#00C9B1]/20 flex-shrink-0">
@@ -260,7 +239,6 @@ export default function Settings() {
           </div>
         )}
 
-        {/* Add new passkey */}
         <div className="space-y-2">
           <input
             type="text"
@@ -269,7 +247,7 @@ export default function Settings() {
             placeholder="Device name (e.g. iPhone 16 Pro)"
             maxLength={100}
             className="w-full px-3 py-2 rounded-xl border border-white/[0.08] bg-white/[0.03] text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-[#00C9B1]/40 transition-all"
-            style={{ fontFamily: "Space Grotesk, sans-serif" }}
+            style={font}
           />
           <Button
             onClick={handleAddPasskey}
@@ -281,25 +259,23 @@ export default function Settings() {
             {addingKey ? "Waiting for biometric…" : "Add New Passkey"}
           </Button>
         </div>
-
         <p className="text-[10px] text-white/20 mt-3 leading-relaxed">
           Passkeys use your device's biometric sensor (Face ID, Touch ID, Windows Hello) to sign in. The private key never leaves your device.
         </p>
       </div>
 
-      {/* Push Notifications */}
+      {/* ── Push Notifications ────────────────────────────────────────────── */}
       <div className="p-5 rounded-2xl border border-white/[0.08] bg-white/[0.02] mt-5">
         <div className="flex items-center gap-2 mb-4">
           <Bell size={14} className="text-[#00C9B1]" />
-          <p className="text-sm font-bold text-white" style={{ fontFamily: "Space Grotesk, sans-serif" }}>Push Notifications</p>
+          <p className="text-sm font-bold text-white" style={font}>Push Notifications</p>
         </div>
-
         {!isPushSupported() ? (
           <p className="text-xs text-white/30">Push notifications are not supported in this browser.</p>
         ) : pushPermission === "denied" ? (
           <div className="p-3 rounded-xl bg-amber-400/5 border border-amber-400/20">
             <p className="text-xs text-amber-400/80 leading-relaxed">
-              Notifications are blocked in your browser settings. To enable, click the lock icon in your address bar and allow notifications for livelock.io.
+              Notifications are blocked in your browser settings. Click the lock icon in your address bar and allow notifications for livelock.io.
             </p>
           </div>
         ) : (
@@ -321,14 +297,10 @@ export default function Settings() {
                     await registerPushSubscription(key);
                     setPushPermission(getNotificationPermission());
                   }
-                } finally {
-                  setPushLoading(false);
-                }
+                } finally { setPushLoading(false); }
               }}
               disabled={pushLoading || !vapidData?.publicKey}
-              className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${
-                pushStatus?.subscribed ? "bg-[#00C9B1]" : "bg-white/[0.10]"
-              } disabled:opacity-50`}
+              className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${pushStatus?.subscribed ? "bg-[#00C9B1]" : "bg-white/[0.10]"} disabled:opacity-50`}
             >
               <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${pushStatus?.subscribed ? "translate-x-5" : "translate-x-0"}`} />
             </button>
@@ -336,17 +308,16 @@ export default function Settings() {
         )}
       </div>
 
-      {/* SMS Notifications */}
+      {/* ── SMS Notifications ─────────────────────────────────────────────── */}
       <div className="p-5 rounded-2xl border border-white/[0.08] bg-white/[0.02] mt-5">
         <div className="flex items-center gap-2 mb-4">
           <MessageSquare size={14} className="text-[#00C9B1]" />
-          <p className="text-sm font-bold text-white" style={{ fontFamily: "Space Grotesk, sans-serif" }}>SMS Notifications</p>
+          <p className="text-sm font-bold text-white" style={font}>SMS Notifications</p>
         </div>
-
-        {!phone.trim() ? (
+        {!user?.phone ? (
           <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
             <p className="text-xs text-white/40 leading-relaxed">
-              Add a mobile number in your <span className="text-[#00C9B1]">Profile</span> above to enable SMS alerts.
+              Add a mobile number in your <button onClick={() => setEditingProfile(true)} className="text-[#00C9B1] hover:underline">Profile</button> above to enable SMS alerts.
             </p>
           </div>
         ) : (
@@ -354,21 +325,18 @@ export default function Settings() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-white/70">Text me when someone wants to verify</p>
-                <p className="text-[10px] text-white/30 mt-0.5">Sent to {phone} · Standard rates may apply</p>
+                <p className="text-[10px] text-white/30 mt-0.5">Sent to {user.phone} · Standard rates may apply</p>
               </div>
               <button
                 onClick={() => { setSmsEnabled(v => !v); setSmsSaved(false); }}
-                className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${
-                  smsEnabled ? "bg-[#00C9B1]" : "bg-white/[0.10]"
-                }`}
+                className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${smsEnabled ? "bg-[#00C9B1]" : "bg-white/[0.10]"}`}
               >
                 <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${smsEnabled ? "translate-x-5" : "translate-x-0"}`} />
               </button>
             </div>
-
             <Button
               onClick={async () => {
-                await updateSmsMutation.mutateAsync({ phone: phone.trim() || null, smsNotifications: smsEnabled });
+                await updateSmsMutation.mutateAsync({ phone: user.phone ?? null, smsNotifications: smsEnabled });
                 setSmsSaved(true);
                 setTimeout(() => setSmsSaved(false), 3000);
               }}
@@ -381,6 +349,15 @@ export default function Settings() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function ProfileRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-[10px] text-white/30 mb-0.5">{label}</p>
+      <p className="text-sm text-white/70">{value}</p>
     </div>
   );
 }

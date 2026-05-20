@@ -494,6 +494,8 @@ const usersRouter = router({
             name: member.name,
             displayName: member.displayName,
             email: member.email,
+            title: member.title,
+            phone: member.phone,
             hasPasskey: member.hasPasskey,
             role: member.role,
             joinedAt: member.joinedAt,

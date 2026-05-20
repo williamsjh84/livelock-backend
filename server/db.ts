@@ -95,6 +95,19 @@ export async function updateUserDisplayName(userId: number, displayName: string)
   await db.update(users).set({ displayName }).where(eq(users.id, userId));
 }
 
+export async function updateUserProfile(userId: number, fields: { displayName?: string; title?: string; phone?: string | null; smsNotifications?: boolean }): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const update: Record<string, unknown> = {};
+  if (fields.displayName !== undefined) update.displayName = fields.displayName;
+  if (fields.title !== undefined) update.title = fields.title;
+  if (fields.phone !== undefined) update.phone = fields.phone;
+  if (fields.smsNotifications !== undefined) update.smsNotifications = fields.smsNotifications;
+  if (Object.keys(update).length > 0) {
+    await db.update(users).set(update).where(eq(users.id, userId));
+  }
+}
+
 // ── Early Access Signups ────────────────────────────────────────────────────
 
 export async function insertEarlyAccessSignup(data: InsertEarlyAccessSignup) {
